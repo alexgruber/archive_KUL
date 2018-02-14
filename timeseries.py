@@ -2,7 +2,39 @@
 import numpy as np
 import pandas as pd
 
-def calc_clim(ts, n=4):
+
+def calc_anomaly(Ser,method='harmonic', output='anomaly'):
+
+    xSer = Ser.dropna().copy()
+    if len(xSer) == 0:
+        return xSer
+
+    doys = xSer.index.dayofyear.values
+    doys[xSer.index.is_leap_year & (doys > 59)] -= 1
+    climSer = pd.Series(index=xSer.index)
+
+    if method=='harmonic':
+        clim = calc_clim_harmonic(Ser)
+    elif method=='mean':
+        clim = calc_clim_harmonic(Ser, n=0)
+    elif (method=='moving_average')|(method=='ma'):
+        clim = calc_clim_moving_average(Ser)
+    else:
+        print 'Unknown method: ' + method
+        return climSer
+
+    if output == 'climatology':
+        return clim
+
+    climSer[:] = clim[doys]
+
+    if output == 'climSer':
+        return climSer
+
+    return xSer - climSer
+
+
+def calc_clim_harmonic(Ser, n=3, cutoff=True):
     """
     Calculates the mean seasonal cycle of a data set
     by fitting harmonics.
@@ -10,28 +42,30 @@ def calc_clim(ts, n=4):
 
     Parameters
     ----------
-    ts : pd.Series w. DatetimeIndex
+    Ser : pd.Series w. DatetimeIndex
         Timeseries of which the climatology shall be calculated.
     n : int (optional)
         Number of harmonics that should be fitted.
         n=0 : long term mean
         n=1 : long term mean + annual cycle
-        n=2 : long term mean + half-annual cycle
-        n=3 : long term mean + annual + seasonal cycle
+        n=2 : long term mean + annual + half-annual cycle
+        n=3 : long term mean + annual + half-annual + seasonal cycle
+    cutoff : boolean
+        If set, the climatology is not allowed to exceed the min/max of the original time series.
 
     Returns
     -------
     clim : pd.Series
-        climatology of ts (without leap days)
+        climatology of Ser (without leap days)
     """
 
     T = 365
 
-    xts = ts.dropna().copy()
-    doys = xts.index.dayofyear.values
+    xSer = Ser.dropna().copy()
+    doys = xSer.index.dayofyear.values
 
     # in leap years, subtract 1 for all days after Feb 28
-    doys[xts.index.is_leap_year & (doys>59)] -= 1
+    doys[xSer.index.is_leap_year & (doys>59)] -= 1
 
     A = np.ones((len(doys),2*n+1))
 
@@ -40,7 +74,7 @@ def calc_clim(ts, n=4):
         A[:,j+n] = np.sin(j * 2 * np.pi * doys / T)
 
     A = np.matrix(A)
-    y = np.matrix(xts.values).T
+    y = np.matrix(xSer.values).T
     try:
         x = np.array((A.T * A).I * A.T * y).flatten()
     except:
@@ -52,48 +86,112 @@ def calc_clim(ts, n=4):
     for j in np.arange(n)+1:
         clim[:] += x[j] * np.cos(j * 2 * np.pi * doys / T) + x[j+n] * np.sin(j * 2 * np.pi * doys / T)
 
+    if cutoff is True:
+        p = np.nanpercentile(xSer.values, [5,95])
+        clim[(clim<p[0])|(clim>p[1])] = np.nan
+
     return clim
 
-
-def calc_pentadal_mean(ts):
+def calc_clim_moving_average(Ser, window_size=45, n_min=20, return_n=False):
     """
-    Calculates the mean seasonal cycle as long-term mean within a 45 days moving average window
-    for each pentad. A minimum of 20 data points are required.
+    Calculates the mean seasonal cycle as long-term mean within a moving average window.
 
     Parameters
     ----------
-    ts : pd.Series w. DatetimeIndex
+    Ser : pd.Series w. DatetimeIndex
         Timeseries of which the climatology shall be calculated.
-
+    window_size : int
+        Moving Average window size
+    n_min : int
+        Minimum number of data points to calculate average
+    return_n : boolean
+        If true, the number of data points over which is averaged is returned
     Returns
     -------
     clim : pd.Series
-        climatology of ts (without leap days)
+        climatology of Ser (without leap days)
     n_days : pd.Series
         the number of data points available within each window
     """
 
-    xts = ts.dropna().copy()
+    xSer = Ser.dropna().copy()
+    doys = xSer.index.dayofyear.values
 
-    doys = xts.index.dayofyear.values
-    doys[xts.index.is_leap_year & (doys > 59)] -= 1
+    # in leap years, subtract 1 for all days after Feb 28
+    doys[xSer.index.is_leap_year & (doys > 59)] -= 1
 
-    ts_pentad = np.floor((doys - 1) / 5.) + 1
+    clim_doys =  np.arange(356) + 1
+    clim = pd.Series(index=clim_doys)
+    n_data = pd.Series(index=clim_doys)
+
+    for doy in clim_doys:
+
+        # Avoid artifacts at start/end of year
+        tmp_doys = doys.copy()
+        if doy < window_size/2.:
+            tmp_doys[tmp_doys > 365 - (np.ceil(window_size/2.)-doy)] -= 365
+        if doy > 365 - (window_size/2. - 1):
+            tmp_doys[tmp_doys < np.ceil(window_size/2.) - (365-doy)] += 365
+
+        n_data[doy] = len(xSer[(tmp_doys >= doy - np.floor(window_size/2.)) & \
+                               (tmp_doys <= doy + np.floor(window_size/2.))])
+
+        if n_data[doy] >= n_min:
+            clim[doy] = xSer[(tmp_doys >= doy - np.floor(window_size/2.)) & \
+                             (tmp_doys <= doy + np.floor(window_size/2.))].values.mean()
+
+    if return_n is False:
+        return clim
+    else:
+        return clim, n_data
+
+
+
+def calc_pentadal_mean(Ser, n_min=20, return_n=False):
+    """
+    Calculates the mean seasonal cycle as long-term mean within a 45 days moving average window
+    for each pentad (Faster than "calc_clim_moving_average" because output only per pentad)
+
+    Parameters
+    ----------
+    Ser : pd.Series w. DatetimeIndex
+        Timeseries of which the climatology shall be calculated.
+    n_min : int
+        Minimum number of data points to calculate average
+    return_n : boolean
+        If true, the number of data points over which is averaged is returned
+    Returns
+    -------
+    clim : pd.Series
+        climatology of Ser (without leap days)
+    n_days : pd.Series
+        the number of data points available within each window
+    """
+
+    xSer = Ser.dropna().copy()
+    doys = xSer.index.dayofyear.values
+
+    # in leap years, subtract 1 for all days after Feb 28
+    doys[xSer.index.is_leap_year & (doys > 59)] -= 1
+
+    Ser_pentad = np.floor((doys - 1) / 5.) + 1
 
     pentads = np.arange(73) + 1
     clim = pd.Series(index=pentads)
     n_data = pd.Series(index=pentads)
     for p in pentads:
-        tmp_pentad = ts_pentad.copy()
+        tmp_pentad = Ser_pentad.copy()
         if p < 5:
             tmp_pentad[tmp_pentad > 10] -= 73
         if p > 69:
             tmp_pentad[tmp_pentad < 60] += 73
-        n_data[p] = len(xts[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)])
+        n_data[p] = len(xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)])
 
-        # only store the climatology if more than 20 data points are available
-        if n_data[p] >= 20:
-            clim[p] = xts[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.mean()
+        if n_data[p] >= n_min:
+            clim[p] = xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.mean()
 
-    return clim, n_data
+    if return_n is False:
+        return clim
+    else:
+        return clim, n_data
 
