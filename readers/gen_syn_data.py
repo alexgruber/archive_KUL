@@ -10,7 +10,7 @@ import pandas as pd
 
 import numpy.random as rnd
 
-from pytesmo.time_series.anomaly import calc_anomaly
+from myprojects.timeseries import calc_anomaly
 
 
 def generate_precipitation_correlated(size=5000, n=2, scale=15):
