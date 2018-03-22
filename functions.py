@@ -1,6 +1,7 @@
 
 import os
 import numpy as np
+import pandas as pd
 
 def walk_up_folder(path, depth=1):
     """ Walk up a specific number of sub-directories """
@@ -38,3 +39,17 @@ def find_files(path,searchstr):
     else:
         return np.array(res)
 
+def merge_files():
+
+    path = r'D:\work\API\MadEnKF\synthetic_experiment'
+    files = find_files(path,'.csv')
+
+    result = pd.DataFrame()
+    for f in files:
+        tmp = pd.DataFrame.from_csv(f)
+        result = result.append(tmp)
+
+    result.to_csv(path + '\\result.csv')
+
+if __name__=='__main__':
+    merge_files()

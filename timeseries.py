@@ -3,7 +3,10 @@ import numpy as np
 import pandas as pd
 
 
-def calc_anomaly(Ser,method='harmonic', output='anomaly'):
+def calc_anomaly(Ser, method='harmonic', output='anomaly', longterm=False):
+
+    if (output=='climatology')&(longterm is True):
+        output = 'climSer'
 
     xSer = Ser.dropna().copy()
     if len(xSer) == 0:
@@ -13,20 +16,31 @@ def calc_anomaly(Ser,method='harmonic', output='anomaly'):
     doys[xSer.index.is_leap_year & (doys > 59)] -= 1
     climSer = pd.Series(index=xSer.index)
 
-    if method=='harmonic':
-        clim = calc_clim_harmonic(Ser)
-    elif method=='mean':
-        clim = calc_clim_harmonic(Ser, n=0)
-    elif (method=='moving_average')|(method=='ma'):
-        clim = calc_clim_moving_average(Ser)
-    else:
+    if not method in ['harmonic','mean','moving_average','ma']:
         print 'Unknown method: ' + method
         return climSer
 
-    if output == 'climatology':
-        return clim
+    if longterm is True:
+        if method=='harmonic':
+            clim = calc_clim_harmonic(xSer)
+        if method=='mean':
+            clim = calc_clim_harmonic(xSer, n=0)
+        if (method=='moving_average')|(method=='ma'):
+            clim = calc_clim_moving_average(xSer)
+        if output == 'climatology':
+            return clim
+        climSer[:] = clim[doys]
 
-    climSer[:] = clim[doys]
+    else:
+        years = xSer.index.year
+        for yr in np.unique(years):
+            if method == 'harmonic':
+                clim = calc_clim_harmonic(xSer[years == yr])
+            if method == 'mean':
+                clim = calc_clim_harmonic(xSer[years == yr], n=0)
+            if (method == 'moving_average') | (method == 'ma'):
+                clim = calc_clim_moving_average(xSer[years == yr])
+            climSer[years == yr] = clim[doys[years == yr]].values
 
     if output == 'climSer':
         return climSer
@@ -86,7 +100,7 @@ def calc_clim_harmonic(Ser, n=3, cutoff=True):
     for j in np.arange(n)+1:
         clim[:] += x[j] * np.cos(j * 2 * np.pi * doys / T) + x[j+n] * np.sin(j * 2 * np.pi * doys / T)
 
-    if cutoff is True:
+    if (cutoff is True)&(len(clim.dropna()!=0)):
         p = np.nanpercentile(xSer.values, [5,95])
         clim[(clim<p[0])|(clim>p[1])] = np.nan
 

@@ -8,6 +8,7 @@ import pandas as pd
 from ismn.readers import read_data
 from ismn.metadata_collector import collect_from_folder
 
+
 from pyldas.grids import EASE2
 
 class ISMN_io(object):
@@ -18,7 +19,7 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-            self.root = r"C:\Users\u0116961\Documents\ISMN_global_20100101_20171231"
+            self.root = r"D:\data_sets\ISMN_global_20100101_20171231"
         else:
             self.root = path
 
@@ -35,15 +36,15 @@ class ISMN_io(object):
         if not os.path.exists(self.list_file):
             print 'Station list does not exist.'
         else:
-            self.list = pd.DataFrame.from_csv(self.list_file)
+            self.list = pd.read_csv(self.list_file)
             self.list['ease_col'] -= self.col_offs
             self.list['ease_row'] -= self.row_offs
 
     def generate_meta_file(self):
 
-        self.meta = collect_from_folder(self.meta_file)
+        self.meta = collect_from_folder(self.root)
 
-        f = open(fname, 'wb')
+        f = open(self.meta_file, 'wb')
         pickle.dump(self.meta, f)
         f.close()
 
