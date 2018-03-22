@@ -2,6 +2,7 @@
 
 import os
 import timeit
+import platform
 
 import numpy as np
 import pandas as pd
@@ -19,31 +20,36 @@ def main():
 
     t = timeit.default_timer()
 
-    n_runs = 48
+    n_runs = 24*2
 
-    SNR_R = np.random.uniform(0.25,4,n_runs)
-    SNR_P = np.random.uniform(0.25,4,n_runs)
+    SNR_R = np.random.uniform(0.25, 4, n_runs)
+    SNR_P = np.random.uniform(0.25, 4, n_runs)
+    gamma = np.random.uniform(0.55, 0.95, n_runs)
+    H_true = np.random.uniform(0.5, 2, n_runs)
     thread = np.arange(n_runs)
 
-    args = zip(SNR_R, SNR_P, thread)
+    args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(8).map(run, args)
+    Pool(24).map(run, args)
 
     print timeit.default_timer() - t
 
 def run(args):
 
-    root = r'D:\work\API\MadEnKF\synthetic_experiment' + '\\'
+    if platform.system() == 'Windows':
+        root = r'D:\work\API\MadEnKF\synthetic_experiment' + '\\'
+    else:
+        root = '/scratch/leuven/320/vsc32046/output/MadEnKF/synthetic_experiment/'
 
     SNR_R = args[0]
     SNR_P = args[1]
-    thread = args[2]
+    gamma = args[2]
+    H_true = args[3]
+    thread = args[4]
 
     fname = root + 'result_%i.csv' % thread
 
     n = 1500
-    gamma = 0.85
-    H_true = 1.6
 
     api = API(gamma=gamma)
 
