@@ -8,7 +8,7 @@ import pandas as pd
 from multiprocessing import Pool
 
 from pyapi.api import API
-from pyass.filter import AdEnKF
+from pyass.filter import MadEnKF
 
 from myprojects.readers.ascat import HSAF_io
 from myprojects.readers.mswep import MSWEP_io
@@ -22,12 +22,12 @@ def main():
     cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
     io.close()
 
-    p = Pool(48)
+    p = Pool(24)
     p.map(run, cells)
 
-    # cells = 601
-    # for cell in np.atleast_1d(cells):cd
-    #     run(cell)
+    #cells = 601
+    #for cell in np.atleast_1d(cells):
+    #    run(cell)
 
 def run(cell):
 
@@ -37,12 +37,13 @@ def run(cell):
     if platform.system() == 'Windows':
         result_file = os.path.join('D:', 'work', 'API', 'AdEnKF', 'result_%04i.csv' % cell)
     else:
-        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'AdEnKF_test', 'result_%04i.csv' % cell)
+        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadEnKF', 'API', 'result_%04i.csv' % cell)
 
     dt = ['2012-01-01','2016-12-31']
 
     for data, info in mswep.iter_cell(cell):
-
+	
+	#if True:
         try:
             precip = mswep.read(info.name)
             sm = ascat.read(info.dgg_gpi)
@@ -56,9 +57,9 @@ def run(cell):
             df = pd.DataFrame({1: precip, 2: sm}, index=pd.date_range(dt[0],dt[1]))
             df.loc[np.isnan(df[1]), 1] = 0.
 
-            api = API(gamma=info.gamma, Q=np.nan)
+            api = API(gamma=info.gamma)
 
-            x_ana, P_ana, R, Q, H, checkvar = AdEnKF(api, df[1].values, df[2].values, n_ens=42, n_iter=17)
+            x_ana, P_ana, R, Q, H, checkvar = MadEnKF(api, df[1].values, df[2].values, n_ens=42, n_iter=17)
 
             result = pd.DataFrame({'lon': info.lon, 'lat': info.lat,
                                    'col': info.col, 'row': info.row,

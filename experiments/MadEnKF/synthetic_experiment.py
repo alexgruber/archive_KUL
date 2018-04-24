@@ -1,5 +1,3 @@
-
-
 import os
 import timeit
 import platform
@@ -20,7 +18,7 @@ def main():
 
     t = timeit.default_timer()
 
-    n_runs = 48*6
+    n_runs = 24*20
 
     SNR_R = np.random.uniform(0.25, 4, n_runs)
     SNR_P = np.random.uniform(0.25, 4, n_runs)
@@ -30,7 +28,7 @@ def main():
 
     args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(48).map(run, args)
+    Pool(24).map(run, args)
 
     print timeit.default_timer() - t
 
@@ -39,7 +37,7 @@ def run(args):
     if platform.system() == 'Windows':
         root = r'D:\work\API\MadEnKF\synthetic_experiment' + '\\'
     else:
-        root = '/scratch/leuven/320/vsc32046/output/MadEnKF/synthetic_experiment/'
+        root = '/data/leuven/320/vsc32046/projects/MadEnKF/synthetic_experiment/'
 
     SNR_R = args[0]
     SNR_P = args[1]
