@@ -20,7 +20,7 @@ def main():
 
     t = timeit.default_timer()
 
-    n_runs = 24*2
+    n_runs = 48*6
 
     SNR_R = np.random.uniform(0.25, 4, n_runs)
     SNR_P = np.random.uniform(0.25, 4, n_runs)
@@ -30,7 +30,7 @@ def main():
 
     args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(24).map(run, args)
+    Pool(48).map(run, args)
 
     print timeit.default_timer() - t
 
@@ -122,7 +122,7 @@ def run(args):
             else:
                 result.to_csv(fname, float_format='%0.4f', mode='a', header=False)
 
-            print 'SNR_P: %.2f, SNR_R: %.2f, n_ens: %i, n_iter: %i' % (SNR_P, SNR_R, n_ens, n_iter)
+            print 'thread: %i, run: %i' % (thread, idx)
 
 if __name__=='__main__':
     main()
