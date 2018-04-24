@@ -32,7 +32,7 @@ def plot_figure(img, lons, lats,
 
 def plot_result():
 
-    res = pd.read_csv(r"D:\work\API\AdEnKF\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\new\result.csv", index_col=0)
 
     io = MSWEP_io()
     lats = io.ds['lat'][:]
@@ -89,7 +89,7 @@ def plot_result():
 
 def plot_syn_result():
 
-    res = pd.read_csv(r"D:\work\API\MadEnKF\synthetic_experiment\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadEnKF\API\synthetic_experiment\new\result.csv", index_col=0)
 
     plt.figure(figsize=(18, 9))
 
@@ -208,7 +208,8 @@ def plot_syn_result():
         ticks.append(iters)
         for col, offs, ens in zip(cols, offsets, ensembles):
             ind = (res['n_ens']==ens)&(res['n_iter']==iters)
-            tmp_data = res.loc[ind,'P_ana_true']
+            # tmp_data = res.loc[ind,'P_ana_true']
+            tmp_data = res.loc[ind,'checkvar']
             data.append(tmp_data)
             pos.append(i + 1 + offs)
             colors.append(col)
@@ -224,10 +225,10 @@ def plot_syn_result():
     plt.xticks(np.arange(len(iterations)) + 1, ticks, fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
     plt.xlim(0.5, len(ticks) + 0.5)
-    plt.ylim(0.0, 60.0)
+    plt.ylim(0.8, 1.6)
     for i in np.arange(len(iterations)):
         plt.axvline(i + 0.5, linewidth=1, color='k')
-    ax.set_title('Analysis RMSE', fontsize=fontsize+2)
+    ax.set_title('Normalized innovation variance', fontsize=fontsize+2)
 
 
     plt.tight_layout()
@@ -235,4 +236,5 @@ def plot_syn_result():
 
 
 if __name__=='__main__':
-    plot_syn_result()
+    plot_result()
+    # plot_syn_result()

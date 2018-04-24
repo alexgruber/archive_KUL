@@ -115,7 +115,70 @@ def increment_density_plot():
     plt.tight_layout()
     plt.show()
 
+
 def plot_innovation_variance():
+
+    ds = xr.open_dataset(r"D:\work\LDAS\2018-02_scaling\_new\diagnostics\filter_diagnostics.nc")
+
+    innov_var_cal = ds['innov_var'][:, :, 1, :].mean(dim='species').values
+    innov_var_uncal = ds['innov_var'][:, :, 3, :].mean(dim='species').values
+
+    print np.nanmean(innov_var_cal), np.nanmean(innov_var_uncal)
+
+    lons = ds.lon.values
+    lats = ds.lat.values
+
+    lons, lats = np.meshgrid(lons, lats)
+
+    llcrnrlat = 24
+    urcrnrlat = 51
+    llcrnrlon = -128
+    urcrnrlon = -64
+
+    figsize = (10, 10)
+    cmap = 'jet'
+    fontsize = 18
+    cbrange = (0, 120)
+
+    plt.figure(figsize=figsize)
+
+    plt.subplot(211)
+    plt_img = np.ma.masked_invalid(innov_var_cal)
+    m = Basemap(projection='mill', llcrnrlat=llcrnrlat, urcrnrlat=urcrnrlat, llcrnrlon=llcrnrlon,urcrnrlon=urcrnrlon, resolution='c')
+    m.drawcoastlines()
+    m.drawcountries()
+    m.drawstates()
+    im = m.pcolormesh(lons, lats, plt_img, cmap=cmap, latlon=True)
+    im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
+    cb = m.colorbar(im, "bottom", size="7%", pad="4%")
+    for t in cb.ax.get_xticklabels():
+        t.set_fontsize(fontsize)
+    for t in cb.ax.get_yticklabels():
+        t.set_fontsize(fontsize)
+    plt.title('Innovation variance (calibrated RTM)', fontsize=fontsize)
+
+    plt.subplot(212)
+    plt_img = np.ma.masked_invalid(innov_var_uncal)
+    m = Basemap(projection='mill', llcrnrlat=llcrnrlat, urcrnrlat=urcrnrlat, llcrnrlon=llcrnrlon, urcrnrlon=urcrnrlon,
+                resolution='c')
+    m.drawcoastlines()
+    m.drawcountries()
+    m.drawstates()
+    im = m.pcolormesh(lons, lats, plt_img, cmap=cmap, latlon=True)
+    im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
+    cb = m.colorbar(im, "bottom", size="7%", pad="4%")
+    for t in cb.ax.get_xticklabels():
+        t.set_fontsize(fontsize)
+    for t in cb.ax.get_yticklabels():
+        t.set_fontsize(fontsize)
+    plt.title('Innovation variance (uncalibrated RTM)', fontsize=fontsize)
+
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_normalized_innovation_variance():
 
     ds = xr.open_dataset(r"D:\work\LDAS\2018-02_scaling\_new\diagnostics\filter_diagnostics.nc")
 
@@ -176,6 +239,7 @@ def plot_innovation_variance():
     plt.tight_layout()
     plt.show()
 
+
 def plot_ismn_statistics():
 
     fname = r"D:\work\LDAS\2018-02_scaling\ismn_eval\no_da_cal_uncal_ma_harm\validation_masked.csv"
@@ -183,8 +247,8 @@ def plot_ismn_statistics():
     res = pd.read_csv(fname, index_col=0)
 
     variables = ['sm_surface','sm_rootzone','sm_profile']
-    runs = ['DA_ref', 'DA_pent']
-    legend = ['calibrated', 'uncalibrated']
+    runs = ['OL', 'DA_ref', 'DA_pent']
+    legend = ['open loop', 'calibrated', 'uncalibrated']
 
     # networks = ['SCAN','USCRN']
     # res.index = res.network
@@ -195,8 +259,8 @@ def plot_ismn_statistics():
 
     plt.figure(figsize=(7, 8))
 
-    offsets = [-0.25, 0.25]
-    cols = ['lightgreen', 'coral']
+    offsets = [-0.2, 0, 0.2]
+    cols = ['lightblue', 'lightgreen', 'coral']
     # offsets = [-0.3,-0.1,0.1,0.3]
     # cols = ['lightblue', 'lightgreen', 'coral', 'brown']
     fontsize = 12
@@ -478,4 +542,4 @@ def plot_model_parameters():
     plt.show()
 
 if __name__=='__main__':
-    plot_model_parameters()
+    plot_ismn_statistics()
