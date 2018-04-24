@@ -149,23 +149,22 @@ def generate_triplet(size=5000):
 #
 #    return err[:,0], err[:,1]
 
-def generate_correleted_error(  size=5000, \
-                                s2_a=50., \
-                                s2_b=50., \
-                                s2_c=50., \
-                                s2_d=50., \
-                                s2_e=50., \
-                                r_ab=0.0,\
-                                r_ac=0.0,\
-                                r_ad=0.0,\
-                                r_ae=0.0,\
-                                r_bc=0.0,\
-                                r_bd=0.0,\
-                                r_be=0.0,\
-                                r_cd=0.0,\
-                                r_ce=0.0,\
-                                r_de=0.0,\
-                                ):
+def generate_correleted_error(  size=5000,
+                                s2_a=50.,
+                                s2_b=50.,
+                                s2_c=50.,
+                                s2_d=50.,
+                                s2_e=50.,
+                                r_ab=0.0,
+                                r_ac=0.0,
+                                r_ad=0.0,
+                                r_ae=0.0,
+                                r_bc=0.0,
+                                r_bd=0.0,
+                                r_be=0.0,
+                                r_cd=0.0,
+                                r_ce=0.0,
+                                r_de=0.0):
     '''
     generate four correlated Gaussian random error time series
 
@@ -183,10 +182,10 @@ def generate_correleted_error(  size=5000, \
     c_ce = r_ce*np.sqrt(s2_c*s2_e)
     c_de = r_de*np.sqrt(s2_d*s2_e)
 
-    cov_mat_err = np.array([[s2_a,c_ab,c_ac,c_ad,c_ae],\
-                            [c_ab,s2_b,c_bc,c_bd,c_be],\
-                            [c_ac,c_bc,s2_c,c_cd,c_ce],\
-                            [c_ad,c_bd,c_cd,s2_d,c_de],\
+    cov_mat_err = np.array([[s2_a,c_ab,c_ac,c_ad,c_ae],
+                            [c_ab,s2_b,c_bc,c_bd,c_be],
+                            [c_ac,c_bc,s2_c,c_cd,c_ce],
+                            [c_ad,c_bd,c_cd,s2_d,c_de],
                             [c_ae,c_be,c_ce,c_de,s2_e]])
 
     err = rnd.multivariate_normal(mean_err,cov_mat_err,size)
