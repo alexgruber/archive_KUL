@@ -19,11 +19,13 @@ from timeit import default_timer
 
 def main():
 
-    io = MSWEP_io()
-    cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
-    io.close()
+    # io = MSWEP_io()
+    # cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
+    # io.close()
 
-    p = Pool(24)
+    cells = [601, 602, 603, 604]
+
+    p = Pool(4)
     p.map(run, cells)
 
     # cells = 601
@@ -34,7 +36,6 @@ def run(cell):
 
     t = default_timer()
 
-    precip = mswep.read(info.name)
     ascat = HSAF_io()
     mswep = MSWEP_io()
 
@@ -49,6 +50,7 @@ def run(cell):
 
         #if True:
         try:
+            precip = mswep.read(info.name)
             sm = ascat.read(info.dgg_gpi)
 
             if (precip is None) | (sm is None):
@@ -78,7 +80,7 @@ def run(cell):
             print 'GPI failed.'
             continue
 
-    print '%i finished in %i hr' % (cell, default_timer() - t)
+    print '%i finished in %i hr' % (cell, (default_timer() - t)/3600.)
 
     ascat.close()
     mswep.close()

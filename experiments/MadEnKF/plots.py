@@ -30,9 +30,19 @@ def plot_figure(img, lons, lats,
     m.colorbar(im, "bottom", size="7%", pad="4%")
 
 
+def plot_insitu_eval_results():
+
+    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\ismn_eval\result.csv", index_col=0)
+
+    res = res[res.n>50][['corr_insitu_ol','corr_insitu_enkf','corr_insitu_madenkf']]
+
+
+
+
+
 def plot_result():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\new\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\temp\result.csv", index_col=0)
 
     io = MSWEP_io()
     lats = io.ds['lat'][:]
