@@ -19,12 +19,11 @@ from timeit import default_timer
 
 def main():
 
-    io = MSWEP_io()
-    cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
-    io.close()
+    # io = MSWEP_io()
+    # cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
+    # io.close()
 
     p = Pool(10)
-    p.map(run, cells)
 
     # cells = 601
     # for cell in np.atleast_1d(cells):

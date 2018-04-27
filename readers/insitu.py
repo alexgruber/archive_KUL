@@ -36,7 +36,7 @@ class ISMN_io(object):
         if not os.path.exists(self.list_file):
             print 'Station list does not exist.'
         else:
-            self.list = pd.read_csv(self.list_file)
+            self.list = pd.read_csv(self.list_file, index_col=0)
             self.list['ease_col'] -= self.col_offs
             self.list['ease_row'] -= self.row_offs
 
