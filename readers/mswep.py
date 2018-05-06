@@ -24,7 +24,7 @@ from mpl_toolkits.basemap import Basemap
 
 class MSWEP_io(object):
 
-    def __init__(self, root=None):
+    def __init__(self, root=None, cellfiles=True):
 
         if root is None:
             if platform.system() == 'Windows':
@@ -32,15 +32,52 @@ class MSWEP_io(object):
             else:
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'MSWEP')
 
-        self.ds = Dataset(np.atleast_1d(find_files(root,'.nc4'))[0])
+        if cellfiles is True:
+            self.root = os.path.join(root, 'cellfiles')
+            self.loaded_cell=None
+            self.ds = None
+        else:
+            self.ds = Dataset(np.atleast_1d(find_files(root,'.nc4'))[0])
+
         self.grid = pd.read_csv(find_files(root,'grid.csv'), index_col=0)
 
 
+    def load(self, cell):
+
+        fname = os.path.join(self.root, '%04i.nc' % cell)
+        if not os.path.exists(fname):
+            print 'File not found: ' + fname
+            return False
+
+        try:
+            if self.ds is not None:
+                self.ds.close()
+            self.ds = Dataset(fname)
+        except:
+            print 'Corrupted cell: %i' % cell
+            return False
+
+        self.loaded_cell = cell
+
+        return True
+
     def read(self, *args):
+        # TODO: PASSING OF COL/ROW NOT SUPPORTED FOR CELLFILE STRUCTURE!!
 
         if len(args) == 1:
-            row = self.grid.loc[args[0],'row']
-            col = self.grid.loc[args[0],'col']
+
+            if hasattr(self,'loaded_cell'):
+                if self.loaded_cell != self.grid.loc[args[0],'dgg_cell']:
+                    loaded = self.load(self.grid.loc[args[0],'dgg_cell'])
+                    if loaded is False:
+                        return None
+
+                row = self.grid.loc[args[0],'cell_row']
+                col = self.grid.loc[args[0],'cell_col']
+            else:
+                row = self.grid.loc[args[0],'row']
+                col = self.grid.loc[args[0],'col']
+
         else:
             col = args[0]
             row = args[1]
@@ -50,7 +87,6 @@ class MSWEP_io(object):
 
         return pd.Series(ts, index=dates)
 
-
     def iter_gp(self):
         for cell in np.unique(self.grid.dgg_cell):
             gpis = self.grid[self.grid.dgg_cell==cell]
@@ -58,17 +94,103 @@ class MSWEP_io(object):
                 data = self.read(gpi)
                 yield data, info
 
-
     def iter_cell(self, cell):
         gpis = self.grid[self.grid.dgg_cell==cell]
         for gpi, info in gpis.iterrows():
             data = self.read(gpi)
             yield data, info
 
-
     def close(self):
-        self.ds.close()
+        if hasattr(self,'ds'):
+            if self.ds is not None:
+                self.ds.close()
 
+
+def generate_cell_files():
+
+    io = MSWEP_io(cellfiles=False)
+    cells = np.unique(io.grid.dgg_cell)
+
+    dates = io.ds['time'][:]
+    timeunit = 'hours since 2000-01-01 00:00'
+    punit = 'mm/d'
+
+    root = r'D:\data_sets\MSWEP_V21\cellfiles' + '\\'
+
+    io.grid['cell_row'] = -1
+    io.grid['cell_col'] = -1
+
+    for cell in cells:
+    # for cell in [420,]:
+        fname = root + '%04i.nc' % cell
+        ulats = np.unique(io.grid.loc[io.grid.dgg_cell==cell,'lat'].values)
+        ulons = np.unique(io.grid.loc[io.grid.dgg_cell==cell,'lon'].values)
+
+        latmin = np.where(io.ds['lat'][:] == ulats.min())[0][0]
+        latmax = np.where(io.ds['lat'][:] == ulats.max())[0][0]+1
+        lonmin = np.where(io.ds['lon'][:] == ulons.min())[0][0]
+        lonmax = np.where(io.ds['lon'][:] == ulons.max())[0][0]+1
+
+        lats = io.ds['lat'][latmin:latmax]
+        lons = io.ds['lon'][lonmin:lonmax]
+
+        for idx, row in io.grid[io.grid.dgg_cell==cell].iterrows():
+            latdiff = abs(lats - row.lat)
+            londiff = abs(lons - row.lon)
+
+            row = np.where(latdiff - latdiff.min() < 0.0001)[0][0]
+            col = np.where(londiff - londiff.min() < 0.0001)[0][0]
+
+            io.grid.loc[idx, 'cell_row'] = row
+            io.grid.loc[idx, 'cell_col'] = col
+
+        # for ulat in ulats:
+        #     for ulon in ulons:
+        #         latdiff = abs(lats - ulat)
+        #         londiff = abs(lons - ulon)
+        #
+        #         row = np.where(latdiff-latdiff.min()<0.0001)[0][0]
+        #         col = np.where(londiff-londiff.min()<0.0001)[0][0]
+        #
+        #         io.grid.loc[(io.grid.lat==ulat)&(io.grid.lon==ulon),'cell_row'] = row
+        #         io.grid.loc[(io.grid.lat==ulat)&(io.grid.lon==ulon),'cell_col'] = col
+
+        img = io.ds['precipitation'][:,latmin:latmax,lonmin:lonmax]
+
+        ds = Dataset(fname, mode='w')
+        dimensions = OrderedDict([('time', dates), ('lat', lats), ('lon', lons)])
+
+        chunksizes = []
+        for key, values in dimensions.iteritems():
+
+            if key in ['lon', 'lat']:
+                chunksize = 1
+            else:
+                chunksize = len(values)
+            chunksizes.append(chunksize)
+
+            dtype = values.dtype
+            ds.createDimension(key, len(values))
+            ds.createVariable(key, dtype,
+                              dimensions=(key,),
+                              chunksizes=(chunksize,),
+                              zlib=True)
+            ds[key][:] = values
+
+        ds.createVariable('precipitation', 'float32',
+                          dimensions=dimensions.keys(),
+                          chunksizes=chunksizes,
+                          fill_value=-9999.,
+                          zlib=True)
+        ds['precipitation'][:, :, :] = img
+
+        ds.variables['time'].setncattr('units', timeunit)
+        ds.variables['precipitation'].setncattr('units', punit)
+
+        ds.close()
+
+    io.grid.to_csv(r"D:\data_sets\MSWEP_V21\grid_new.csv")
+    io.close()
 
 def combine_tile_files():
 
@@ -267,5 +389,5 @@ def plot_gamma():
     plt.show()
 
 if __name__=='__main__':
-    plot_gamma()
-
+    generate_cell_files()
+    pass
