@@ -82,7 +82,7 @@ def run(args):
             P_true = Q_true / (1 - gamma ** 2)
             P_OL_true = (np.mean((sm_true - OL)**2))
 
-            x_ana_madenkf, P_ana_madenkf, R_est_madenkf, Q_est_madenkf, H_est_madenkf, checkvar_madenkf = MadEnKF(api, forcing, obs, n_ens=n_ens, n_iter=n_iter)
+            x_ana_madenkf, P_ana_madenkf, R_est_madenkf, Q_est_madenkf, H_est_madenkf, checkvar_madenkf, K = MadEnKF(api, forcing, obs, n_ens=n_ens, n_iter=n_iter)
 
             P_ana_true_madenkf = np.mean((sm_true - x_ana_madenkf) ** 2)
             P_ana_est_madenkf = P_ana_madenkf.mean()
@@ -92,13 +92,13 @@ def run(args):
 
                 forc_pert = ['normal', 'additive', Q_true]
                 obs_pert = ['normal', 'additive', R_est_rmsd]
-                x_ana_enkf_rmsd, P_ana_enkf_rmsd, checkvar_enkf_rmsd = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
+                x_ana_enkf_rmsd, P_ana_enkf_rmsd, checkvar_enkf_rmsd, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
 
                 P_ana_est_enkf_rmsd = P_ana_enkf_rmsd.mean()
                 P_ana_true_enkf_rmsd = np.mean((sm_true - x_ana_enkf_rmsd) ** 2)
 
                 obs_pert = ['normal', 'additive', R_true]
-                x_ana_enkf_true, P_ana_enkf_true, checkvar_enkf_true = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
+                x_ana_enkf_true, P_ana_enkf_true, checkvar_enkf_true, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
 
                 P_ana_est_enkf_true = P_ana_enkf_true.mean()
                 P_ana_true_enkf_true = np.mean((sm_true - x_ana_enkf_true) ** 2)

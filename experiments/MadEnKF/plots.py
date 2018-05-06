@@ -38,11 +38,9 @@ def plot_insitu_eval_results():
 
 
 
-
-
 def plot_result():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\temp\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadEnKF\API\_old\CONUS\result.csv", index_col=0)
 
     io = MSWEP_io()
     lats = io.ds['lat'][:]
@@ -66,11 +64,11 @@ def plot_result():
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(221)
     plot_figure(img_masked,lons,lats,cbrange=cbrange,cmap=cmap)
-    plt.title('sqrt('+param+')', fontsize=20)
+    plt.title('sqrt(Q)', fontsize=20)
 
 
     param = 'R'
-    cbrange = [0, 16]
+    cbrange = [0, 20]
     cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
@@ -78,7 +76,18 @@ def plot_result():
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(222)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt('+param+')', fontsize=20)
+    plt.title('sqrt(R)$', fontsize=20)
+
+    param = 'H'
+    cbrange = [0, 2]
+    cmap = 'jet'
+    img = np.full(lats.shape, np.nan)
+    ind = (rows, cols)
+    img[ind] = res[param].values
+    img_masked = np.ma.masked_invalid(img)
+    plt.subplot(223)
+    plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
+    plt.title('H', fontsize=20)
 
 
     param = 'checkvar'
@@ -88,7 +97,7 @@ def plot_result():
     ind = (rows,cols)
     img[ind] = res[param].values
     img_masked = np.ma.masked_invalid(img)
-    plt.subplot(223)
+    plt.subplot(224)
     plot_figure(img_masked,lons,lats,cbrange=cbrange,cmap=cmap)
     plt.title('innov_var', fontsize=20)
 
