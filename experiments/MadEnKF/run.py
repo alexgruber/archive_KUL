@@ -17,18 +17,24 @@ from myprojects.timeseries import calc_anomaly
 
 import timeit
 
-def main():
+def main(part):
 
     io = MSWEP_io()
     cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
     io.close()
 
-    p = Pool(18)
-    p.map(run, cells)
+    parts = 4
 
-    # cells = 601
-    # for cell in np.atleast_1d(cells):
-    #    run(cell)
+    subs = (np.arange(parts + 1) * len(cells) / parts).astype('int')
+    subs[-1] = len(cells)
+    start = subs[part - 1]
+    end = subs[part]
+    cells = cells[start:end]
+
+    print cells
+
+    for cell in np.atleast_1d(cells):
+       run(cell)
 
 def run(cell):
 
@@ -123,4 +129,4 @@ def run(cell):
     mswep.close()
 
 if __name__=='__main__':
-    main()
+    main(4)
