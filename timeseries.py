@@ -134,7 +134,7 @@ def calc_clim_moving_average(Ser, window_size=45, n_min=20, return_n=False):
     # in leap years, subtract 1 for all days after Feb 28
     doys[xSer.index.is_leap_year & (doys > 59)] -= 1
 
-    clim_doys =  np.arange(356) + 1
+    clim_doys =  np.arange(365) + 1
     clim = pd.Series(index=clim_doys)
     n_data = pd.Series(index=clim_doys)
 

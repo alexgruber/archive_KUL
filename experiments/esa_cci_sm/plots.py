@@ -18,7 +18,7 @@ def plot_figure(img, lons, lats,
                 cbrange=(0,1),
                 cmap='jet_r',
                 plot_cmap=True,
-                fontsize=8):
+                fontsize=12):
 
     m = Basemap(projection='mill',
                     llcrnrlat=llcrnrlat,
@@ -34,7 +34,7 @@ def plot_figure(img, lons, lats,
     im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
 
     if plot_cmap is True:
-        cb = m.colorbar(im, "bottom", size="7%", pad="4%")
+        cb = m.colorbar(im, "bottom", size="10%", pad="4%")
         for t in cb.ax.get_xticklabels():
              t.set_fontsize(fontsize)
         for t in cb.ax.get_yticklabels():
@@ -57,6 +57,7 @@ def plot_weights_combined_v3():
     root = r"D:\work\esa_cci_sm" + '\\'
     errp_file = root + 'errp_combined_v3.csv'
 
+    fout = r'I:\publications\2018_ag_cci_merging\images\weights.png'
 
     df = pd.read_csv(errp_file, index_col=0, dtype='float')
     df.index = df.index.values.astype('int64')
@@ -82,7 +83,7 @@ def plot_weights_combined_v3():
 
     figsize = (10,12)
 
-    plt.figure(figsize=figsize)
+    f = plt.figure(figsize=figsize)
 
     lons = (np.arange(360 * 4) * 0.25) - 179.875
     lats = (np.arange(180 * 4) * 0.25) - 89.875
@@ -114,7 +115,7 @@ def plot_weights_combined_v3():
         img_masked = np.ma.masked_invalid(img.reshape((180*4,360*4)))
 
         plot_figure(img_masked, lons, lats)
-        plt.title(titles[i], fontsize=8)
+        plt.title(titles[i], fontsize=10)
 
 
     plt.subplot(5, 2, 9)
@@ -129,17 +130,24 @@ def plot_weights_combined_v3():
     plot_figure(img_masked, lons, lats, cmap='YlGn')
     plt.title('Mean VOD', fontsize=8)
 
-    plt.show()
+    # plt.show()
     plt.tight_layout()
 
+    f.savefig(fout, dpi=300)
+    plt.close()
 
 def plot_gapfilled_snr():
 
     fname = r"D:\work\esa_cci_sm\errp_combined_gapfilled.csv"
 
+    fout = r'I:\publications\2018_ag_cci_merging\images\snr.png'
+
     df = pd.read_csv(fname, index_col=0, dtype='float')
     df.index = df.index.values.astype('int64')
     df = df.loc[df.index>0,:]
+
+    mask = pd.read_csv("D:\work\esa_cci_sm\pointlist_Greenland_quarter.csv",index_col=0)
+    df.drop(mask.index, errors='ignore', inplace=True)
 
     tags = ['snr_ers',
             'snr_ascat',
@@ -150,18 +158,18 @@ def plot_gapfilled_snr():
             'snr_smos',
             'snr_amsr2']
 
-    titles = ['SNR ERS',
-              'SNR ASCAT',
-              'SNR SSM/I',
-              'SNR TMI',
-              'SNR AMSR-E',
-              'SNR WindSat',
-              'SNR SMOS',
-              'SNR AMSR2']
+    titles = ['ERS',
+              'ASCAT',
+              'SSM/I',
+              'TMI',
+              'AMSR-E',
+              'WindSat',
+              'SMOS',
+              'AMSR2']
 
     figsize = (10,12)
 
-    plt.figure(figsize=figsize)
+    f = plt.figure(figsize=figsize)
 
     lons = (np.arange(360 * 4) * 0.25) - 179.875
     lats = (np.arange(180 * 4) * 0.25) - 89.875
@@ -175,14 +183,74 @@ def plot_gapfilled_snr():
         img[df.index.values] = 10*np.log10(df[tag])
         img_masked = np.ma.masked_invalid(img.reshape((180*4,360*4)))
 
-        plot_figure(img_masked, lons, lats, cbrange=[-9,9],plot_cmap=False)
-        plt.title(titles[i], fontsize=8)
+        plot_figure(img_masked, lons, lats, cbrange=[-9,9],plot_cmap=True)
+        plt.title(titles[i], fontsize=12)
 
-    plt.show()
+    # plt.show()
     plt.tight_layout()
 
+    f.savefig(fout, dpi=300)
+    plt.close()
 
+
+def plot_gapfilled_snr_v5():
+
+    fname = r"D:\work\esa_cci_sm\errp_v5\anom\errp_combined_gapfilled.csv"
+
+    fout = r'I:\publications\2018_ag_cci_merging\images\v5_snr_anom.png'
+
+    df = pd.read_csv(fname, index_col=0, dtype='float')
+    df.index = df.index.values.astype('int64')
+    df = df.loc[df.index>0,:]
+
+    mask = pd.read_csv("D:\work\esa_cci_sm\pointlist_Greenland_quarter.csv",index_col=0)
+    df.drop(mask.index, errors='ignore', inplace=True)
+
+    tags = ['snr_ers',
+            'snr_ascat',
+            'snr_ssmi',
+            'snr_tmi',
+            'snr_amsre',
+            'snr_windsat',
+            'snr_smos',
+            'snr_amsr2',
+            'snr_smap']
+
+    titles = ['ERS',
+              'ASCAT',
+              'SSM/I',
+              'TMI',
+              'AMSR-E',
+              'WindSat',
+              'SMOS',
+              'AMSR2',
+              'SMAP']
+
+    figsize = (14,9)
+
+    f = plt.figure(figsize=figsize)
+
+    lons = (np.arange(360 * 4) * 0.25) - 179.875
+    lats = (np.arange(180 * 4) * 0.25) - 89.875
+    lons, lats = np.meshgrid(lons, lats)
+
+    for i,tag in enumerate(tags):
+
+        plt.subplot(3,3,i+1)
+
+        img = np.full(lons.size, np.nan)
+        img[df.index.values] = 10*np.log10(df[tag])
+        img_masked = np.ma.masked_invalid(img.reshape((180*4,360*4)))
+
+        plot_figure(img_masked, lons, lats, cbrange=[-9,9],plot_cmap=True)
+        plt.title(titles[i], fontsize=12)
+
+    # plt.show()
+    plt.tight_layout()
+
+    f.savefig(fout, dpi=300)
+    plt.close()
 
 
 if __name__=='__main__':
-    plot_gapfilled_snr()
+    plot_gapfilled_snr_v5()

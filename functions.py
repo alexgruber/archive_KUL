@@ -41,12 +41,12 @@ def find_files(path,searchstr):
 
 def merge_files():
 
-    path = r'D:\work\MadEnKF\API\CONUS\new'
+    path = r'D:\work\MadEnKF\API\CONUS\domain'
     files = find_files(path,'.csv')
 
     result = pd.DataFrame()
     for f in files:
-        tmp = pd.DataFrame.from_csv(f)
+        tmp = pd.read_csv(f, index_col=0)
         result = result.append(tmp)
 
     result.to_csv(path + '\\result.csv')

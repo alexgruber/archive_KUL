@@ -13,6 +13,7 @@ from netCDF4 import Dataset, num2date, date2num
 
 from myprojects.timeseries import calc_anomaly
 from myprojects.readers.ascat import HSAF_io
+from myprojects.readers.smos import SMOS_io
 from myprojects.functions import find_files
 
 from scipy.optimize import fminbound
@@ -289,7 +290,6 @@ def combine_tile_files():
 
     ds.close()
 
-
 def correct_grid_col_row():
 
     io = MSWEP_io()
@@ -301,6 +301,24 @@ def correct_grid_col_row():
         io.grid.loc[gpi, 'col'] = np.where(lons == data['lon'])[0][0]
 
     io.grid.to_csv(r"D:\data_sets\MSWEP_V21\data\grid_corrected.csv")
+
+def append_smos_gpis():
+
+    grid_mswep = MSWEP_io().grid
+    grid_smos = SMOS_io().grid
+
+    grid_mswep['smos_gpi'] = -1
+
+    lats = grid_smos['lat'].values
+    lons = grid_smos['lon'].values
+
+    for cnt, (gpi, data) in enumerate(grid_mswep.iterrows()):
+        print '%i / %i' % (cnt, len(grid_mswep))
+
+        r = np.sqrt((lats - data.lat) ** 2 + (lons - data.lon) ** 2)
+        grid_mswep.loc[gpi, 'smos_gpi'] = grid_smos.iloc[np.where(abs(r - r.min()) < 0.0001)[0][0],:].name
+
+    grid_mswep.to_csv(r"D:\data_sets\MSWEP_V21\grid_corrected.csv")
 
 def calc_api(gamma, precip):
     n = len(precip)
@@ -389,5 +407,4 @@ def plot_gamma():
     plt.show()
 
 if __name__=='__main__':
-    generate_cell_files()
-    pass
+    append_smos_gpis()

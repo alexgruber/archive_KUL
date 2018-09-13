@@ -8,6 +8,8 @@ import pandas as pd
 
 from netCDF4 import Dataset, num2date
 
+from pyldas.interface import LDAS_io
+
 class HSAF_io(object):
 
     def __init__(self, root=None, version='H113'):
@@ -50,7 +52,7 @@ class HSAF_io(object):
 
         return True
 
-    def read(self, gpi):
+    def read(self, gpi, resample_time=True):
 
         if not gpi in self.gpis:
             print 'GPI not found'
@@ -78,8 +80,14 @@ class HSAF_io(object):
             return None
 
         sm = self.fid['sm'][start:end][ind_valid]
-        time = num2date(self.fid['time'][start:end][ind_valid].round(),
-                        units=self.fid['time'].units)
+
+        if resample_time is True:
+            time = num2date(self.fid['time'][start:end][ind_valid].round(),
+                            units=self.fid['time'].units)
+        else:
+            time = num2date(self.fid['time'][start:end][ind_valid],
+                            units=self.fid['time'].units)
+
 
         ts = pd.Series(sm, index=time)
 
@@ -88,3 +96,51 @@ class HSAF_io(object):
     def close(self):
         if self.fid is not None:
             self.fid.close()
+
+
+def append_ease_gpis():
+
+    gpi_list = pd.read_csv(r"D:\data_sets\ASCAT\warp5_grid\pointlist_warp_conus.csv",index_col=0)
+
+    gpi_list['ease_col'] = 0
+    gpi_list['ease_row'] = 0
+
+    LDAS = LDAS_io(exp='US_M36_SMOS40_noDA_cal_scaled')
+
+    i = 0
+    for idx, info in gpi_list.iterrows():
+        i += 1
+        print '%i / %i' % (i, len(gpi_list))
+
+        col, row = LDAS.grid.lonlat2colrow(gpi_list.loc[idx, 'lon'], gpi_list.loc[idx, 'lat'], domain=True)
+
+        gpi_list.loc[idx,'ease_col'] = col
+        gpi_list.loc[idx,'ease_row'] = row
+
+    gpi_list.to_csv(r"D:\data_sets\ASCAT\warp5_grid\pointlist_warp_conus_w_ease_colrow.csv")
+
+
+if __name__=='__main__':
+    append_ease_gpis()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

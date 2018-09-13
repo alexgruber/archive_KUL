@@ -27,19 +27,22 @@ def lonlat2gpi(lon,lat,grid):
 
 def main():
 
-    # part = 1
-    # run(part)
+    part = 3
+    run(part)
 
-    parts = np.arange(6) + 1
-    p = Pool(6)
-    p.map(run, parts)
+    # parts = np.arange(6) + 1
+    # p = Pool(6)
+    # p.map(run, parts)
 
 def run(part):
-    parts = 6
+    parts = 3
 
     ismn = ISMN_io()
     ascat = HSAF_io()
     mswep = MSWEP_io()
+
+    # Median Q from MadEnKF API/CONUS run.
+    Q_avg = 16.
 
     # Select only SCAN and USCRN
     # ismn.list = ismn.list[(ismn.list.network=='SCAN')|(ismn.list.network=='USCRN')]
@@ -61,7 +64,7 @@ def run(part):
 
     for station, insitu in ismn.iter_stations():
 
-        #if True:
+        # if True:
         try:
             gpi = lonlat2gpi(station.lon, station.lat, mswep.grid)
             mswep_idx = mswep.grid.index[mswep.grid.dgg_gpi == gpi][0]
@@ -82,8 +85,8 @@ def run(part):
 
             if len(df.dropna()) < 50:
                 continue
-
-            api = API(gamma=mswep.grid.loc[mswep_idx,'gamma'])
+            gamma = mswep.grid.loc[mswep_idx,'gamma']
+            api = API(gamma=gamma)
 
             # --- OL run ---
             x_OL = np.full(n, np.nan)
@@ -92,16 +95,30 @@ def run(part):
                 x = model.step(f)
                 x_OL[t] = x
 
-            # --- EnKF run ---
-            force_pert = ['normal','additive', 15] # random value for avg error (variance)
-            obs_pert = ['normal','additive', 50]  # random value for avg error (variance)
-            x_ana_enkf, P_ana_enkf, checkvar_enkf = EnKF(api, df[1].values, df[2].values, force_pert, obs_pert, n_ens=42)
 
             # --- MadEnKF run ---
-            x_ana_madenkf, P_ana_madenkf, R, Q, H, checkvar_madenkf = MadEnKF(api, df[1].values, df[2].values, n_ens=42, n_iter=13)
+            x_ana_madenkf, P_ana_madenkf, R_madenkf, Q_madenkf, H_madenkf, checkvar_madenkf, K_madenkf = \
+                MadEnKF(api, df[1].values, df[2].values, n_ens=42, n_iter=13)
+
+            # --- EnKF run with and without scaling ---
+            P_avg = Q_avg / (1 - gamma ** 2)
+            forc_pert = ['normal', 'additive', Q_avg]
+
+            df2 = pd.DataFrame({1: x_OL, 2: sm}, index=pd.date_range(dt[0], dt[1])).dropna()
+
+            R_rmsd = (np.nanmean((df2[1].values - df2[2].values) ** 2) - P_avg)
+            obs_pert = ['normal', 'additive', R_rmsd]
+            x_ana_enkf, P, checkvar_enkf, K_enkf = \
+                EnKF(api, df[1].values, df[2].values, forc_pert, obs_pert, H=None, n_ens=42)
+
+            R_rmsd_scaled = (np.nanmean((df2[1].values - H_madenkf * df2[2].values) ** 2) - P_avg) / H_madenkf ** 2
+            obs_pert = ['normal', 'additive', R_rmsd_scaled]
+            x_ana_enkf_scaled, P, checkvar_enkf_scaled, K_enkf_scaled = \
+                EnKF(api, df[1].values, df[2].values, forc_pert, obs_pert, H=H_madenkf, n_ens=42)
 
             df['x_ol'] = x_OL
             df['x_enkf'] = x_ana_enkf
+            df['x_enkf_scaled'] = x_ana_enkf_scaled
             df['x_madenkf'] = x_ana_madenkf
 
             corr = df.dropna().corr()
@@ -110,11 +127,24 @@ def run(part):
             result = pd.DataFrame({'lon': station.lon, 'lat': station.lat,
                                    'network': station.network, 'station': station.station,
                                    'gpi': gpi,
-                                   'R': R, 'Q': Q, 'H': H, 'n': n_vals,
+                                   'n': n_vals,
+                                   'R_madenkf': R_madenkf,
+                                   'Q_madenkf': Q_madenkf,
+                                   'P_madenkf': Q_madenkf / (1 - gamma**2),
+                                   'H_madenkf': H_madenkf,
+                                   'K_madenkf': K_madenkf,
+                                   'Q_avg': Q_avg,
+                                   'P_avg': P_avg,
+                                   'R_rmsd': R_rmsd,
+                                   'R_rmsd_scaled': R_rmsd_scaled,
+                                   'K_enkf': K_enkf,
+                                   'K_enkf_scaled': K_enkf_scaled,
                                    'corr_insitu_ol': corr[3]['x_ol'],
                                    'corr_insitu_enkf': corr[3]['x_enkf'],
+                                   'corr_insitu_enkf_scaled': corr[3]['x_enkf_scaled'],
                                    'corr_insitu_madenkf': corr[3]['x_madenkf'],
                                    'checkvar_enkf': checkvar_enkf,
+                                   'checkvar_enkf_scaled': checkvar_enkf_scaled,
                                    'checkvar_madenkf': checkvar_madenkf}, index=(station.name,))
 
             if (os.path.isfile(result_file) == False):
