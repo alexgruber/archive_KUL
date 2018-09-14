@@ -26,7 +26,7 @@ def main(part):
     cells = np.unique(io.grid.dgg_cell.copy().astype('int'))
     io.close()
 
-    parts = 4
+    parts = 12
 
     subs = (np.arange(parts + 1) * len(cells) / parts).astype('int')
     subs[-1] = len(cells)
@@ -45,8 +45,9 @@ def run(cell):
     ascat = HSAF_io()
     mswep = MSWEP_io()
 
-    # Median Q from MadEnKF API/CONUS run.
-    Q_avg = 16.
+    # Median Q/R from TC run.
+    Q_avg = 12.
+    R_avg = 38.
 
     if platform.system() == 'Windows':
         result_file = os.path.join('D:', 'work', 'MadEnKF', 'API', 'CONUS', 'result_%04i.csv' % cell)
@@ -87,44 +88,56 @@ def run(cell):
             # collocate OL and satellite data sets.
             df2 = pd.DataFrame({1: OL, 2: sm_ascat, 3: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
 
+            # ----- Calculate uncertainties -----
+            # convert (static) forcing to model uncertainty
+            P_avg = Q_avg / (1 - info.gamma**2)
+
             # calculate TCA based uncertainty and scaling coefficients
             snr, err, beta = tcol_snr(df2[1].values, df2[2].values, df2[3].values)
             P_TC = err[0]**2
             Q_TC = P_TC * (1 - info.gamma ** 2)
-            R_TC = err[1]**2
+            R_TC = (err[1]/beta[1])**2
             H_TC = beta[1]
 
-            # ----- Run EnKF using TCA-based uncertainties -----
-            t = timeit.default_timer()
-            forc_pert = ['normal', 'additive', Q_TC]
-            obs_pert = ['normal', 'additive', R_TC]
-            x_tc, P, checkvar_tc, K_tc = \
-                EnKF(api, df[1].values, df[2].values, forc_pert, obs_pert, H=H_TC, n_ens=42)
-            t_tc = timeit.default_timer() - t
-
-            # ----- Run EnKF using RMSD-based uncertainties (corrected for model uncertainty) -----
-            t = timeit.default_timer()
-            P_avg = Q_avg / (1 - info.gamma**2)
-            forc_pert = ['normal', 'additive', Q_avg]
+            # Calculate RMSD based uncertainty
             R_rmsd = (np.nanmean((df2[1].values - H_TC * df2[2].values) ** 2) - P_avg)
             if R_rmsd < 0:
                 R_rmsd *= -1
+            # -----------------------------------
+
+            # ----- Run EnKF using TCA-based uncertainties -----
+            forc_pert = ['normal', 'additive', Q_TC]
+            obs_pert = ['normal', 'additive', R_TC]
+            x_tc, P, checkvar_tc, K_tc = \
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+
+            # ----- Run EnKF using static uncertainties -----
+            forc_pert = ['normal', 'additive', Q_avg]
+            obs_pert = ['normal', 'additive', R_avg]
+            x_avg, P, checkvar_avg, K_avg = \
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+
+            # ----- Run EnKF using RMSD-based uncertainties (corrected for model uncertainty) -----
+            t = timeit.default_timer()
+            forc_pert = ['normal', 'additive', Q_avg]
             obs_pert = ['normal', 'additive', R_rmsd]
             x_rmsd, P, checkvar_rmsd, K_rmsd = \
-                EnKF(api, df[1].values, df[2].values, forc_pert, obs_pert, H=H_TC, n_ens=42)
-            t_rmsd = timeit.default_timer() - t
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+            t_enkf = timeit.default_timer() - t
 
             # ----- Run MadEnKF -----
             t = timeit.default_timer()
             x_madenkf, P, R_madenkf, Q_madenkf, H_madenkf, checkvar_madenkf, K_madenkf = \
-                MadEnKF(api, df[1].values, df[2].values, n_ens=42, n_iter=13)
+                MadEnKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=40, n_iter=10)
             t_madenkf = timeit.default_timer() - t
 
             # TC evaluation of assimilation results
-            df3 = pd.DataFrame({1: x_tc, 2: x_rmsd, 3: x_madenkf, 4: sm_ascat, 5: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
-            P_ana_tc = tcol_snr(df3[1].values, df3[4].values, df3[5].values)[1][0]**2
-            P_ana_rmsd = tcol_snr(df3[2].values, df3[4].values, df3[5].values)[1][0]**2
-            P_ana_madenkf = tcol_snr(df3[3].values, df3[4].values, df3[5].values)[1][0]**2
+            df3 = pd.DataFrame({1: x_tc, 2: x_avg, 3: x_rmsd, 4: x_madenkf, 5: sm_ascat, 6: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
+
+            rmse_ana_tc = tcol_snr(df3[1].values, df3[5].values, df3[6].values)[1][0]
+            rmse_ana_avg = tcol_snr(df3[2].values, df3[5].values, df3[6].values)[1][0]
+            rmse_ana_rmsd = tcol_snr(df3[3].values, df3[5].values, df3[6].values)[1][0]
+            rmse_ana_madenkf = tcol_snr(df3[4].values, df3[5].values, df3[6].values)[1][0]
 
             result = pd.DataFrame({'lon': info.lon, 'lat': info.lat,
                                    'col': info.col, 'row': info.row,
@@ -134,23 +147,26 @@ def run(cell):
                                    'H_tc': H_TC,
                                    'K_tc': K_tc,
                                    'checkvar_tc': checkvar_tc,
-                                   'Q_avg': Q_avg,
                                    'P_avg': P_avg,
+                                   'Q_avg': Q_avg,
+                                   'R_avg': R_avg,
+                                   'K_avg': K_avg,
+                                   'checkvar_avg': checkvar_avg,
                                    'R_rmsd': R_rmsd,
-                                   'K_enkf': K_rmsd,
-                                   'checkvar_enkf': checkvar_rmsd,
-                                   'R_madenkf': R_madenkf,
-                                   'Q_madenkf': Q_madenkf,
+                                   'K_rmsd': K_rmsd,
+                                   'checkvar_rmsd': checkvar_rmsd,
                                    'P_madenkf': Q_madenkf / (1 - info.gamma**2),
+                                   'Q_madenkf': Q_madenkf,
+                                   'R_madenkf': R_madenkf,
                                    'H_madenkf': H_madenkf,
                                    'K_madenkf': K_madenkf,
                                    'checkvar_madenkf': checkvar_madenkf,
-                                   't_tc': t_tc,
-                                   't_rmsd': t_rmsd,
+                                   't_enkf': t_enkf,
                                    't_madenkf': t_madenkf,
-                                   'P_ana_tc': P_ana_tc,
-                                   'P_ana_rmsd': P_ana_rmsd,
-                                   'P_ana_madenkf': P_ana_madenkf}, index=(info.name,))
+                                   'rmse_ana_tc': rmse_ana_tc,
+                                   'rmse_ana_avg': rmse_ana_avg,
+                                   'rmse_ana_rmsd': rmse_ana_rmsd,
+                                   'rmse_ana_madenkf': rmse_ana_madenkf}, index=(info.name,))
 
             if (os.path.isfile(result_file) == False):
                 result.to_csv(result_file, float_format='%0.4f')
