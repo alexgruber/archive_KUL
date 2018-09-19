@@ -88,6 +88,16 @@ class MSWEP_io(object):
 
         return pd.Series(ts, index=dates)
 
+    def gpi2cell(self, gpi):
+        return self.grid.loc[self.grid.index==gpi, 'dgg_cell'].values[0]
+
+    def lonlat2gpi(self, lon, lat):
+        lons = self.grid['lon'].values
+        lats = self.grid['lat'].values
+        r = np.sqrt((lats - lat) ** 2 + (lons - lon) ** 2)
+        return self.grid.iloc[np.where(abs(r - r.min()) < 0.0001)[0][0], :].name
+
+
     def iter_gp(self):
         for cell in np.unique(self.grid.dgg_cell):
             gpis = self.grid[self.grid.dgg_cell==cell]
@@ -95,11 +105,17 @@ class MSWEP_io(object):
                 data = self.read(gpi)
                 yield data, info
 
-    def iter_cell(self, cell):
-        gpis = self.grid[self.grid.dgg_cell==cell]
-        for gpi, info in gpis.iterrows():
-            data = self.read(gpi)
-            yield data, info
+    def iter_cell(self, cell, gpis=None):
+        cellgpis = self.grid[self.grid.dgg_cell==cell]
+        if gpis is None:
+            for gpi, info in cellgpis.iterrows():
+                data = self.read(gpi)
+                yield data, info
+        else:
+            for gpi in np.atleast_1d(gpis):
+                info = cellgpis[cellgpis.index==gpi].transpose()[gpi]
+                data = self.read(gpi)
+                yield data, info
 
     def close(self):
         if hasattr(self,'ds'):
