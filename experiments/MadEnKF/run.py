@@ -8,7 +8,7 @@ import pandas as pd
 from multiprocessing import Pool
 
 from pyapi.api import API
-from pyass.filter import MadEnKF, EnKF
+from pyass.filter import MadEnKF, EnKF, KF, KF_2D
 
 from myprojects.readers.smos import SMOS_io
 from myprojects.readers.ascat import HSAF_io
@@ -37,17 +37,24 @@ def main(part):
     print cells
 
     for cell in np.atleast_1d(cells):
-       run(cell)
+       run(cell=cell)
 
-def run(cell):
+def run(cell=None, gpi=None):
+
+    if (cell is None) and (gpi is None):
+        print 'No cell/gpi specified.'
+        return
 
     smos = SMOS_io()
     ascat = HSAF_io()
     mswep = MSWEP_io()
 
+    if gpi is not None:
+        cell = mswep.gpi2cell(gpi)
+
     # Median Q/R from TC run.
     Q_avg = 12.
-    R_avg = 38.
+    R_avg = 74.
 
     if platform.system() == 'Windows':
         result_file = os.path.join('D:', 'work', 'MadEnKF', 'API', 'CONUS', 'result_%04i.csv' % cell)
@@ -56,7 +63,7 @@ def run(cell):
 
     dt = ['2012-01-01','2015-12-31']
 
-    for data, info in mswep.iter_cell(cell):
+    for data, info in mswep.iter_cell(cell, gpis=gpi):
 
         # print info.name
         # if True:
@@ -77,6 +84,11 @@ def run(cell):
             # Regularize time steps
             df = pd.DataFrame({1: precip, 2: sm_ascat, 3: sm_smos}, index=pd.date_range(dt[0],dt[1]))
             df.loc[np.isnan(df[1]), 1] = 0.
+
+            n_inv_precip = len(np.where(np.isnan(df[1]))[0])
+            n_inv_ascat = len(np.where(np.isnan(df[2]))[0])
+            n_inv_smos = len(np.where(np.isnan(df[3]))[0])
+            n_inv_asc_smo = len(np.where(np.isnan(df[2]) & np.isnan(df[3]))[0])
 
             # --- get OL ts  ---
             OL = np.full(len(precip), np.nan)
@@ -105,6 +117,18 @@ def run(cell):
                 R_rmsd *= -1
             # -----------------------------------
 
+            # ----- Run KF using TCA-based uncertainties -----
+            api_kf = API(gamma=info.gamma, Q=Q_TC)
+            R_2D = np.array([(err[1]/beta[1])**2, (err[2]/beta[2])**2])
+            H_2D = np.array([beta[1]**(-1), beta[2]**(-1)])
+            x_2d, P, checkvar1_2d, checkvar2_2d, checkvar3_2d, K1_2d, K2_2d = \
+                KF_2D(api_kf, df[1].values.copy(), df[2].values.copy(), df[3].values.copy(), R_2D, H=H_2D)
+
+            # ----- Run KF using TCA-based uncertainties -----
+            api_kf = API(gamma=info.gamma, Q=Q_TC)
+            x_kf, P, checkvar_kf, K_kf = \
+                KF(api_kf, df[1].values.copy(), df[2].values.copy(), R_TC, H=H_TC)
+
             # ----- Run EnKF using TCA-based uncertainties -----
             forc_pert = ['normal', 'additive', Q_TC]
             obs_pert = ['normal', 'additive', R_TC]
@@ -128,16 +152,16 @@ def run(cell):
             # ----- Run MadEnKF -----
             t = timeit.default_timer()
             x_madenkf, P, R_madenkf, Q_madenkf, H_madenkf, checkvar_madenkf, K_madenkf = \
-                MadEnKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=40, n_iter=10)
+                MadEnKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=60, n_iter=20)
             t_madenkf = timeit.default_timer() - t
 
             # TC evaluation of assimilation results
-            df3 = pd.DataFrame({1: x_tc, 2: x_avg, 3: x_rmsd, 4: x_madenkf, 5: sm_ascat, 6: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
-
-            rmse_ana_tc = tcol_snr(df3[1].values, df3[5].values, df3[6].values)[1][0]
-            rmse_ana_avg = tcol_snr(df3[2].values, df3[5].values, df3[6].values)[1][0]
-            rmse_ana_rmsd = tcol_snr(df3[3].values, df3[5].values, df3[6].values)[1][0]
-            rmse_ana_madenkf = tcol_snr(df3[4].values, df3[5].values, df3[6].values)[1][0]
+            # df3 = pd.DataFrame({1: x_tc, 2: x_avg, 3: x_rmsd, 4: x_madenkf, 5: sm_ascat, 6: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
+            #
+            # rmse_ana_tc = tcol_snr(df3[1].values, df3[5].values, df3[6].values)[1][0]
+            # rmse_ana_avg = tcol_snr(df3[2].values, df3[5].values, df3[6].values)[1][0]
+            # rmse_ana_rmsd = tcol_snr(df3[3].values, df3[5].values, df3[6].values)[1][0]
+            # rmse_ana_madenkf = tcol_snr(df3[4].values, df3[5].values, df3[6].values)[1][0]
 
             result = pd.DataFrame({'lon': info.lon, 'lat': info.lat,
                                    'col': info.col, 'row': info.row,
@@ -147,6 +171,13 @@ def run(cell):
                                    'H_tc': H_TC,
                                    'K_tc': K_tc,
                                    'checkvar_tc': checkvar_tc,
+                                   'K_kf': K_kf,
+                                   'checkvar_kf': checkvar_kf,
+                                   'K1_2d': K1_2d,
+                                   'K2_2d': K2_2d,
+                                   'checkvar1_2d': checkvar1_2d,
+                                   'checkvar2_2d': checkvar2_2d,
+                                   'checkvar3_2d': checkvar3_2d,
                                    'P_avg': P_avg,
                                    'Q_avg': Q_avg,
                                    'R_avg': R_avg,
@@ -163,10 +194,10 @@ def run(cell):
                                    'checkvar_madenkf': checkvar_madenkf,
                                    't_enkf': t_enkf,
                                    't_madenkf': t_madenkf,
-                                   'rmse_ana_tc': rmse_ana_tc,
-                                   'rmse_ana_avg': rmse_ana_avg,
-                                   'rmse_ana_rmsd': rmse_ana_rmsd,
-                                   'rmse_ana_madenkf': rmse_ana_madenkf}, index=(info.name,))
+                                   'n_inv_precip': n_inv_precip,
+                                   'n_inv_ascat': n_inv_ascat,
+                                   'n_inv_smos': n_inv_smos,
+                                   'n_inv_asc_smo': n_inv_asc_smo}, index=(info.name,))
 
             if (os.path.isfile(result_file) == False):
                 result.to_csv(result_file, float_format='%0.4f')
@@ -180,5 +211,21 @@ def run(cell):
     mswep.close()
 
 if __name__=='__main__':
-    # main(4)
-    run(601)
+
+    # lat = 37.028681964
+    # lon = -120.279189837
+    # gpi = MSWEP_io().lonlat2gpi(lon,lat)
+
+    run(cell=601)
+
+
+
+
+
+
+
+
+
+
+
+
