@@ -29,30 +29,60 @@ def plot_figure(img, lons, lats,
     im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
     m.colorbar(im, "bottom", size="7%", pad="4%")
 
+    med = np.percentile(img[np.where(~np.isnan(img))],50)
+    x, y = m(-78.5,25)
+    plt.text(x,y,'median = %.2f' % med ,fontsize=16)
 
 def plot_insitu_eval_results():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\ismn_eval\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadKF\API\CONUS\ismn_eval\result.csv", index_col=0)
 
     res = res[(res.network == 'SCAN') | (res.network == 'USCRN')]
 
-    res = res[res.n>50][['corr_insitu_ol','corr_insitu_enkf', 'corr_insitu_enkf_scaled', 'corr_insitu_madenkf']]
+    cols = ['corr_ol', 'corr_avg', 'corr_rmsd', 'corr_kf', 'corr_madkf']
+    ylim = [0.0, 0.7]
+
+    # cols = ['rmse_ol','rmse_kf', 'rmse_avg', 'rmse_rmsd', 'rmse_madkf']
+    # ylim = [0, 0.04]
+
+    res = res[res.n_all>50][cols]
+    cols = ['OL', 'const. err', 'rmsd', 'TC', 'MadKF']
 
     print len(res)
 
-    plt.figure(figsize=(10,8))
-    res.boxplot(showfliers=False, whis=[5,95])
-    plt.ylim([0,0.8])
-    plt.xticks(rotation=30,fontsize=12)
-    plt.yticks(fontsize=12)
+    tmp_data = [x[1].values for x in res.iteritems()]
+    plt.figure(figsize=(8,8))
+    ax = plt.subplot(111)
 
-    plt.title('SCAN + USCRN (n=121)', fontsize=12)
+    ax.yaxis.grid(True, linestyle='--', which='major', color='lightgrey',
+                   alpha=0.7)
+
+    box = ax.boxplot(tmp_data, whis=[5, 95], showfliers=False, widths=0.2, patch_artist=True, boxprops=dict(alpha=.7))
+    # res.boxplot(showfliers=False, whis=[5,95])
+
+    for patch in box['boxes']:
+        patch.set(color='black', linewidth=2)
+        patch.set_facecolor('orange')
+    for patch in box['medians']:
+        patch.set(color='black', linewidth=2)
+    for patch in box['whiskers']:
+        patch.set(color='black', linewidth=1)
+
+    plt.ylim(ylim)
+    plt.xticks(np.arange(len(cols))+1, cols, rotation=40, fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.ylabel('Correlation', fontsize = 12)
+
+    for i in np.arange(4)+1.5:
+        plt.axvline(i, linewidth=1, linestyle='--', color='lightgrey', alpha=0.7)
+
+    plt.title('SCAN + USCRN', fontsize=12)
 
     plt.tight_layout()
     plt.show()
 
 def plot_result2():
-    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\domain\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadKF\API\CONUS\result.csv", index_col=0)
 
     io = MSWEP_io(cellfiles = False)
     lats = io.ds['lat'][:]
@@ -65,11 +95,11 @@ def plot_result2():
     figsize = (17, 10)
     plt.figure(num=None, figsize=figsize, dpi=90, facecolor='w', edgecolor='k')
 
-    cbrange = [0,1]
+    # cbrange = [0,1]
 
-    param = 'Q_avg'
+    param = 'P_tc'
     # cbrange = cbrange
-    cbrange = [0, 10]
+    cbrange = [0, 20]
     cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
@@ -77,22 +107,22 @@ def plot_result2():
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(221)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt(Q_avg)', fontsize=16)
+    plt.title('sqrt(P_TC)', fontsize=16)
 
-    param = 'R_rmsd'
+    param = 'R_tc'
     # cbrange = cbrange
-    cbrange = [0, 16]
+    cbrange = [0, 20]
     cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
-    img[ind] = np.sqrt(res[param].values)
+    img[ind] =  np.sqrt(res[param].values) * res['H_tc'].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(222)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt(R_rmsd)', fontsize=16)
+    plt.title('sqrt(R_TC)', fontsize=16)
 
-    param = 'Q_madenkf'
-    cbrange = [0, 10]
+    param = 'P_madkf'
+    cbrange = [0, 20]
     # cbrange = cbrange
     cmap = 'jet'
     img = np.full(lats.shape, np.nan)
@@ -101,18 +131,18 @@ def plot_result2():
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(223)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt(Q_madenkf)', fontsize=16)
+    plt.title('sqrt(P_madkf)', fontsize=16)
 
-    param = 'R_madenkf'
-    cbrange = [0, 16]
+    param = 'R_madkf'
+    cbrange = [0, 20]
     cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
-    img[ind] = np.sqrt(res[param].values)
+    img[ind] = np.sqrt(res[param].values) * res['H_madkf'].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(224)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt(R_madenkf)', fontsize=20)
+    plt.title('sqrt(r_madkf)', fontsize=20)
 
     plt.tight_layout()
     plt.show()
@@ -120,7 +150,7 @@ def plot_result2():
 
 def plot_result():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\CONUS\domain\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadKF\API\CONUS\result.csv", index_col=0)
 
     io = MSWEP_io(cellfiles = False)
     lats = io.ds['lat'][:]
@@ -130,56 +160,66 @@ def plot_result():
     rows = res['row'].values.astype('int')
     cols = res['col'].values.astype('int')
 
-
     figsize = (17, 10)
     plt.figure(num=None, figsize=figsize, dpi=90, facecolor='w', edgecolor='k')
 
+    # n_obs = 1461.
 
-    param = 'Q'
-    cbrange = [0, 10]
-    cmap = 'jet'
+    cmap = 'seismic_r'
+    cbrange = [0, 2]
+
+    param = 'checkvar1_2d'
+    cbrange = cbrange
+    # cbrange = [0, 150]
+    cmap = cmap
+    # cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows,cols)
-    img[ind] = np.sqrt(res[param].values)
+    img[ind] = res[param].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(221)
     plot_figure(img_masked,lons,lats,cbrange=cbrange,cmap=cmap)
-    plt.title('sqrt(Q)', fontsize=20)
+    plt.title('Innovation variance KF (MOD - ASC)', fontsize=20)
 
 
-    param = 'R'
-    cbrange = [0, 20]
-    cmap = 'jet'
+    param = 'checkvar2_2d'
+    cbrange = cbrange
+    # cbrange = [0, 150]
+    cmap = cmap
+    # cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
-    img[ind] = np.sqrt(res[param].values)
+    img[ind] = res[param].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(222)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('sqrt(R)$', fontsize=20)
+    plt.title('Innovation variance KF (MOD - SMO)', fontsize=20)
 
-    param = 'H'
-    cbrange = [0, 2]
-    cmap = 'jet'
+    param = 'checkvar3_2d'
+    cbrange = cbrange
+    # cbrange = [0, 150]
+    cmap = cmap
+    # cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows, cols)
     img[ind] = res[param].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(223)
     plot_figure(img_masked, lons, lats, cbrange=cbrange, cmap=cmap)
-    plt.title('H', fontsize=20)
+    plt.title('Innovation variance KF (4*MOD - ASC - SMO)', fontsize=20)
 
-
-    param = 'checkvar'
-    cbrange = [0.6, 1.4]
-    cmap = 'RdYlBu'
+    param = 'checkvar_madkf'
+    cbrange = cbrange
+    # cbrange = [0, 150]
+    cmap = cmap
+    # cmap = 'jet'
     img = np.full(lats.shape, np.nan)
     ind = (rows,cols)
     img[ind] = res[param].values
     img_masked = np.ma.masked_invalid(img)
     plt.subplot(224)
     plot_figure(img_masked,lons,lats,cbrange=cbrange,cmap=cmap)
-    plt.title('innov_var', fontsize=20)
+    plt.title('Innovation variance MadKF', fontsize=20)
 
 
     plt.tight_layout()
@@ -187,12 +227,12 @@ def plot_result():
 
 def plot_syn_result2():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\synthetic_experiment\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadKF\API\synthetic_experiment\result.csv", index_col=0)
 
-    ticks = ['R(RMSD) / R(true)', 'R(MadEnKF) / R(true)',
-             'P(true) / P(true)', 'P(RMSD) / P(true)', 'P(MadEnKF) / P(true)',
-             'innov_var(true)', 'innov_var(RMSD)', 'innov_var(MadEnKF)',
-             'corr(OL)', 'corr(obs)', 'corr(true)', 'corr(RMSD)', 'corr(MadEnKF)']
+    ticks = ['R(RMSD) / R(true)', 'R(MadKF) / R(true)',
+             'P(true) / P(true)', 'P(RMSD) / P(true)', 'P(MadKF) / P(true)',
+             'innov_var(true)', 'innov_var(RMSD)', 'innov_var(MadKF)',
+             'corr(OL)', 'corr(obs)', 'corr(true)', 'corr(RMSD)', 'corr(MadKF)']
 
     colors = ['lightblue', 'lightblue',
               'lightgreen', 'lightgreen', 'lightgreen',
@@ -202,21 +242,21 @@ def plot_syn_result2():
     data = list()
 
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'R_est_rmsd'] / res.loc[(res['n_ens']==50)&(res['n_iter']==5),'R_true'])
-    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'R_est_madenkf'] / res.loc[(res['n_ens']==50)&(res['n_iter']==13),'R_true'])
+    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'R_est_madkf'] / res.loc[(res['n_ens']==50)&(res['n_iter']==13),'R_true'])
 
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'P_ana_est_enkf_true'] / res.loc[(res['n_ens']==50)&(res['n_iter']==5),'P_ana_true_enkf_true'])
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'P_ana_est_enkf_rmsd'] / res.loc[(res['n_ens']==50)&(res['n_iter']==5),'P_ana_true_enkf_true'])
-    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'P_ana_est_madenkf'] / res.loc[(res['n_ens']==50)&(res['n_iter']==13),'P_ana_true_madenkf'])
+    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'P_ana_est_madkf'] / res.loc[(res['n_ens']==50)&(res['n_iter']==13),'P_ana_true_madkf'])
 
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'checkvar_enkf_true'])
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'checkvar_enkf_rmsd'])
-    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'checkvar_madenkf'])
+    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'checkvar_madkf'])
 
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'corr_OL'])
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'corr_obs'])
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'corr_ana_enkf_true'])
     data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==5),'corr_ana_enkf_rmsd'])
-    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'corr_ana_madenkf'])
+    data.append(res.loc[(res['n_ens']==50)&(res['n_iter']==13),'corr_ana_madkf'])
 
     pos = np.arange(1,len(data)+1)
 
@@ -253,7 +293,7 @@ def plot_syn_result2():
 
 def plot_syn_result():
 
-    res = pd.read_csv(r"D:\work\MadEnKF\API\synthetic_experiment\result.csv", index_col=0)
+    res = pd.read_csv(r"D:\work\MadKF\API\synthetic_experiment\result.csv", index_col=0)
 
     plt.figure(figsize=(18, 9))
 
@@ -277,7 +317,7 @@ def plot_syn_result():
         ticks.append(iters)
         for col, offs, ens in zip(cols, offsets, ensembles):
             ind = (res['n_ens'] == ens) & (res['n_iter'] == iters)
-            tmp_data = res.loc[ind,'R_est_madenkf'] / res.loc[ind,'R_true']
+            tmp_data = res.loc[ind,'R_est_madkf'] / res.loc[ind,'R_true']
             data.append(tmp_data)
             pos.append(i + 1 + offs)
             colors.append(col)
@@ -308,7 +348,7 @@ def plot_syn_result():
         ticks.append(iters)
         for col, offs, ens in zip(cols, offsets, ensembles):
             ind = (res['n_ens'] == ens) & (res['n_iter'] == iters)
-            tmp_data = res.loc[ind,'Q_est_madenkf'] / res.loc[ind,'Q_true']
+            tmp_data = res.loc[ind,'Q_est_madkf'] / res.loc[ind,'Q_true']
             data.append(tmp_data)
             pos.append(i + 1 + offs)
             colors.append(col)
@@ -340,7 +380,7 @@ def plot_syn_result():
         ticks.append(iters)
         for col, offs, ens in zip(cols, offsets, ensembles):
             ind = (res['n_ens'] == ens) & (res['n_iter'] == iters)
-            tmp_data = res.loc[ind,'H_est_madenkf'] / res.loc[ind,'H_true']
+            tmp_data = res.loc[ind,'H_est_madkf'] / res.loc[ind,'H_true']
             data.append(tmp_data)
             pos.append(i + 1 + offs)
             colors.append(col)
@@ -373,7 +413,7 @@ def plot_syn_result():
         for col, offs, ens in zip(cols, offsets, ensembles):
             ind = (res['n_ens']==ens)&(res['n_iter']==iters)
             # tmp_data = res.loc[ind,'P_ana_true']
-            tmp_data = res.loc[ind,'checkvar_madenkf']
+            tmp_data = res.loc[ind,'checkvar_madkf']
             data.append(tmp_data)
             pos.append(i + 1 + offs)
             colors.append(col)

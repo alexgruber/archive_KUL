@@ -28,7 +28,7 @@ def correct_n(n, df):
             rho += rho_ds2
     rho /= 2 * len(lags)
 
-    ## --- GDL version: multiply AC of the ts instead of averaging ---
+    # --- GDL version: multiply AC of the ts instead of averaging ---
     #     if (P_ds1 < 0.05) & (rho_ds1 > 0) & (P_ds2 < 0.05) & (rho_ds2 > 0):
     #         rho += rho_ds1 * rho_ds2
     # rho /= len(lags)
@@ -36,7 +36,7 @@ def correct_n(n, df):
     return round(n * (1 - rho) / (1 + rho))
 
 
-def bias(df, dropna=True, alpha=0.95, flatten=True):
+def bias(df, dropna=True, alpha=0.05, flatten=True):
     """"
     Calculates temporal mean biases and its confidence intervals based on Student's t-distribution,
     both with and without auto-correlation corrected sample size.
@@ -99,7 +99,7 @@ def bias(df, dropna=True, alpha=0.95, flatten=True):
             bias = diff.mean()
             ubRMSD = diff.std(ddof=1)
 
-            t_l, t_u = t.interval(alpha, n-1)
+            t_l, t_u = t.interval(1-alpha, n-1)
             CI_l = bias + t_l * ubRMSD / np.sqrt(n)
             CI_u = bias + t_u * ubRMSD / np.sqrt(n)
 
@@ -128,7 +128,7 @@ def bias(df, dropna=True, alpha=0.95, flatten=True):
     return res
 
 
-def ubRMSD(df, dropna=True, alpha=0.95, flatten=True):
+def ubRMSD(df, dropna=True, alpha=0.05, flatten=True):
     """"
     Calculates the unbiased Root-Mean-Square-Difference and its confidence intervals based on the chi-distribution,
     both with and without auto-correlation corrected sample size.
@@ -188,9 +188,10 @@ def ubRMSD(df, dropna=True, alpha=0.95, flatten=True):
 
             # Calculate bias & ubRMSD
             diff = tmpdf[ds1].values - tmpdf[ds2].values
+            bias = diff.mean()
             ubRMSD = diff.std(ddof=1)
 
-            chi_l, chi_u = chi.interval(alpha, n-1)
+            chi_l, chi_u = chi.interval(1-alpha, n-1)
             CI_l = ubRMSD * np.sqrt(n-1) / chi_u
             CI_u = ubRMSD * np.sqrt(n-1) / chi_l
 
@@ -205,7 +206,7 @@ def ubRMSD(df, dropna=True, alpha=0.95, flatten=True):
                 continue
 
             # Confidence intervals with corrected sample size
-            chi_l, chi_u = chi.interval(alpha, n_corr - 1)
+            chi_l, chi_u = chi.interval(1-alpha, n_corr - 1)
             CI_l = ubRMSD * np.sqrt(n_corr - 1) / chi_u
             CI_u = ubRMSD * np.sqrt(n_corr - 1) / chi_l
 

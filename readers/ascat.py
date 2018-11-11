@@ -12,7 +12,7 @@ from pyldas.interface import LDAS_io
 
 class HSAF_io(object):
 
-    def __init__(self, root=None, version='H113'):
+    def __init__(self, root=None, version='h113', ext='h114'):
 
         if root is None:
             if platform.system() == 'Windows':
@@ -21,6 +21,7 @@ class HSAF_io(object):
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'ASCAT')
 
         self.data_path = os.path.join(root, version)
+        self.version = version.upper()
 
         grid = Dataset(os.path.join(root, 'warp5_grid', 'TUW_WARP5_grid_info_2_2.nc'))
         self.gpis = grid['gpi'][:][grid['land_flag'][:]==1]
@@ -30,12 +31,17 @@ class HSAF_io(object):
         self.loaded_cell = None
         self.fid = None
 
+        if ext is not None:
+            self.ext = HSAF_io(root=root, version=ext, ext=None)
+        else:
+            self.ext = None
+
         # self.frozen_snow_prob = xr.open_dataset(os.path.join(self.root, 'static_layer', 'frozen_snow_probability.nc'))
         # quite slow to read!
 
     def load(self, cell):
 
-        fname = os.path.join(self.data_path, 'H113_%04i.nc' % cell)
+        fname = os.path.join(self.data_path, self.version + '_%04i.nc' % cell)
         if not os.path.exists(fname):
             print 'File not found: ' + fname
             return False
@@ -90,12 +96,19 @@ class HSAF_io(object):
 
 
         ts = pd.Series(sm, index=time)
+        ts = ts.groupby(ts.index).mean()
 
-        return ts.groupby(ts.index).mean()
+        if self.ext is not None:
+            ts_ext = self.ext.read(gpi, resample_time=resample_time)
+            ts = pd.concat((ts,ts_ext))
+
+        return ts
 
     def close(self):
         if self.fid is not None:
             self.fid.close()
+        if self.ext is not None:
+            self.ext.close()
 
 
 def append_ease_gpis():
@@ -122,6 +135,7 @@ def append_ease_gpis():
 
 if __name__=='__main__':
     append_ease_gpis()
+
 
 
 

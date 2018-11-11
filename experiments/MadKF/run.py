@@ -8,7 +8,7 @@ import pandas as pd
 from multiprocessing import Pool
 
 from pyapi.api import API
-from pyass.filter import MadEnKF, EnKF, KF, KF_2D
+from pyass.filter import MadKF, EnKF, KF, KF_2D
 
 from myprojects.readers.smos import SMOS_io
 from myprojects.readers.ascat import HSAF_io
@@ -57,9 +57,9 @@ def run(cell=None, gpi=None):
     R_avg = 74.
 
     if platform.system() == 'Windows':
-        result_file = os.path.join('D:', 'work', 'MadEnKF', 'API', 'CONUS', 'result_%04i.csv' % cell)
+        result_file = os.path.join('D:', 'work', 'MadKF', 'API', 'CONUS', 'result_%04i.csv' % cell)
     else:
-        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadEnKF', 'API', 'result_%04i.csv' % cell)
+        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadKF', 'API', 'result_%04i.csv' % cell)
 
     dt = ['2012-01-01','2015-12-31']
 
@@ -83,12 +83,13 @@ def run(cell=None, gpi=None):
 
             # Regularize time steps
             df = pd.DataFrame({1: precip, 2: sm_ascat, 3: sm_smos}, index=pd.date_range(dt[0],dt[1]))
-            df.loc[np.isnan(df[1]), 1] = 0.
 
             n_inv_precip = len(np.where(np.isnan(df[1]))[0])
             n_inv_ascat = len(np.where(np.isnan(df[2]))[0])
             n_inv_smos = len(np.where(np.isnan(df[3]))[0])
             n_inv_asc_smo = len(np.where(np.isnan(df[2]) & np.isnan(df[3]))[0])
+
+            df.loc[np.isnan(df[1]), 1] = 0.
 
             # --- get OL ts  ---
             OL = np.full(len(precip), np.nan)
@@ -149,19 +150,19 @@ def run(cell=None, gpi=None):
                 EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
             t_enkf = timeit.default_timer() - t
 
-            # ----- Run MadEnKF -----
+            # ----- Run MadKF -----
             t = timeit.default_timer()
-            x_madenkf, P, R_madenkf, Q_madenkf, H_madenkf, checkvar_madenkf, K_madenkf = \
-                MadEnKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=60, n_iter=20)
-            t_madenkf = timeit.default_timer() - t
+            x_madkf, P, R_madkf, Q_madkf, H_madkf, checkvar_madkf, K_madkf = \
+                MadKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=60, n_iter=20)
+            t_madkf = timeit.default_timer() - t
 
             # TC evaluation of assimilation results
-            # df3 = pd.DataFrame({1: x_tc, 2: x_avg, 3: x_rmsd, 4: x_madenkf, 5: sm_ascat, 6: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
+            # df3 = pd.DataFrame({1: x_tc, 2: x_avg, 3: x_rmsd, 4: x_madkf, 5: sm_ascat, 6: sm_smos}, index=pd.date_range(dt[0], dt[1])).dropna()
             #
             # rmse_ana_tc = tcol_snr(df3[1].values, df3[5].values, df3[6].values)[1][0]
             # rmse_ana_avg = tcol_snr(df3[2].values, df3[5].values, df3[6].values)[1][0]
             # rmse_ana_rmsd = tcol_snr(df3[3].values, df3[5].values, df3[6].values)[1][0]
-            # rmse_ana_madenkf = tcol_snr(df3[4].values, df3[5].values, df3[6].values)[1][0]
+            # rmse_ana_madkf = tcol_snr(df3[4].values, df3[5].values, df3[6].values)[1][0]
 
             result = pd.DataFrame({'lon': info.lon, 'lat': info.lat,
                                    'col': info.col, 'row': info.row,
@@ -186,14 +187,14 @@ def run(cell=None, gpi=None):
                                    'R_rmsd': R_rmsd,
                                    'K_rmsd': K_rmsd,
                                    'checkvar_rmsd': checkvar_rmsd,
-                                   'P_madenkf': Q_madenkf / (1 - info.gamma**2),
-                                   'Q_madenkf': Q_madenkf,
-                                   'R_madenkf': R_madenkf,
-                                   'H_madenkf': H_madenkf,
-                                   'K_madenkf': K_madenkf,
-                                   'checkvar_madenkf': checkvar_madenkf,
+                                   'P_madkf': Q_madkf / (1 - info.gamma**2),
+                                   'Q_madkf': Q_madkf,
+                                   'R_madkf': R_madkf,
+                                   'H_madkf': H_madkf,
+                                   'K_madkf': K_madkf,
+                                   'checkvar_madkf': checkvar_madkf,
                                    't_enkf': t_enkf,
-                                   't_madenkf': t_madenkf,
+                                   't_madkf': t_madkf,
                                    'n_inv_precip': n_inv_precip,
                                    'n_inv_ascat': n_inv_ascat,
                                    'n_inv_smos': n_inv_smos,
