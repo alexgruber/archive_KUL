@@ -126,15 +126,44 @@ def generate_error(size=5000, mean=0, var=50):
 
     return err
 
-def generate_triplet(size=5000):
+def generate_error_correlated(size=5000, mean=0, var=50, corr=0.75):
+    '''
+    generate Gaussian random error time series
 
-    sm = generate_soil_moisture(size=size)
+    '''
 
-    x = sm + generate_error(size=size)
-    y = sm + generate_error(size=size)
-    z = sm + generate_error(size=size)
+    cov = var*corr
+    C = [[var, 0, 0, 0],
+         [0, var, 0, 0],
+         [0, 0, var, cov],
+         [0, 0, cov, var]]
+
+    err = np.random.multivariate_normal([0,0,0,0],C,size=size)
+
+    return err
+
+def generate_triplet(size=5000, gamma=0.85, err_corr=0.85):
+
+    sm = generate_soil_moisture(size=size, gamma=gamma)[0]
+    err = generate_error_correlated(size=size, corr=err_corr)
+
+    x = sm + err[:,0]
+    y = sm + err[:,1]
+    z = sm + err[:,2]
 
     return x,y,z
+
+def generate_quadruple(size=5000, gamma=0.85, err_corr=0.85):
+
+    sm = generate_soil_moisture(size=size, gamma=gamma)[0]
+    err = generate_error_correlated(size=size, corr=err_corr)
+
+    a = sm + err[:,0]
+    b = sm + err[:,1]
+    c = sm + err[:,2]
+    d = sm + err[:,3]
+
+    return a,b,c,d
 
 #def generate_correleted_error(size=5000, mean=0., var_x=30., var_y=90., r_xy=0.7):
 #    '''

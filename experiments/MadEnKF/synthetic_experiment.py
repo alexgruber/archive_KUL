@@ -9,7 +9,7 @@ from copy import deepcopy
 from multiprocessing import Pool
 
 from pyapi.api import API
-from pyass.filter import MadEnKF, EnKF
+from pyass.filter import MadKF, EnKF
 
 from myprojects.readers.gen_syn_data import generate_soil_moisture
 
@@ -25,7 +25,7 @@ def main():
 
     args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(12).map(run, args)
+    Pool(4).map(run, args)
 
     # args = [0.8, 1.2, 0.85, 2, 0]
     # run(args)
@@ -33,9 +33,9 @@ def main():
 def run(args):
 
     if platform.system() == 'Windows':
-        root = r'D:\work\MadEnKF\API\synthetic_experiment\new' + '\\'
+        root = r'D:\work\MadKF\synthetic_experiment'
     else:
-        root = '/data/leuven/320/vsc32046/projects/MadEnKF/synthetic_experiment/'
+        root = '/data/leuven/320/vsc32046/projects/MadKF/synthetic_experiment'
 
     SNR_R = args[0]
     SNR_P = args[1]
@@ -43,7 +43,7 @@ def run(args):
     H_true = args[3]
     thread = args[4]
 
-    fname = root + 'result_%i.csv' % thread
+    fname = os.path.join(root,'result_%i.csv' % thread)
 
     n = 1500
 
@@ -82,23 +82,23 @@ def run(args):
             P_true = Q_true / (1 - gamma ** 2)
             P_OL_true = (np.mean((sm_true - OL)**2))
 
-            x_ana_madenkf, P_ana_madenkf, R_est_madenkf, Q_est_madenkf, H_est_madenkf, checkvar_madenkf, K = MadEnKF(api, forcing, obs, n_ens=n_ens, n_iter=n_iter)
+            x_ana_madkf, P_ana_madkf, R_est_madkf, Q_est_madkf, H_est_madkf, R_innov_madkf, checkvar_madkf, K = MadKF(api, forcing, obs, n_ens=n_ens, n_iter=n_iter)
 
-            P_ana_true_madenkf = np.mean((sm_true - x_ana_madenkf) ** 2)
-            P_ana_est_madenkf = P_ana_madenkf.mean()
+            P_ana_true_madkf = np.mean((sm_true - x_ana_madkf) ** 2)
+            P_ana_est_madkf = P_ana_madkf.mean()
 
             if n_iter == n_iter_arr[0]:
                 R_est_rmsd = (np.mean((OL - H_true * obs) ** 2) - P_true) / H_true ** 2
 
                 forc_pert = ['normal', 'additive', Q_true]
                 obs_pert = ['normal', 'additive', R_est_rmsd]
-                x_ana_enkf_rmsd, P_ana_enkf_rmsd, checkvar_enkf_rmsd, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
+                x_ana_enkf_rmsd, P_ana_enkf_rmsd, R_innov_enkf_rmsd, checkvar_enkf_rmsd, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
 
                 P_ana_est_enkf_rmsd = P_ana_enkf_rmsd.mean()
                 P_ana_true_enkf_rmsd = np.mean((sm_true - x_ana_enkf_rmsd) ** 2)
 
                 obs_pert = ['normal', 'additive', R_true]
-                x_ana_enkf_true, P_ana_enkf_true, checkvar_enkf_true, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
+                x_ana_enkf_true, P_ana_enkf_true, R_innov_enkf_true, checkvar_enkf_true, K = EnKF(api, forcing, obs, forc_pert, obs_pert, H=H_true, n_ens=n_ens)
 
                 P_ana_est_enkf_true = P_ana_enkf_true.mean()
                 P_ana_true_enkf_true = np.mean((sm_true - x_ana_enkf_true) ** 2)
@@ -109,17 +109,19 @@ def run(args):
                 P_ana_est_enkf_rmsd = np.nan
                 P_ana_true_enkf_rmsd = np.nan
                 checkvar_enkf_rmsd = np.nan
+                R_innov_enkf_rmsd = np.nan
 
                 x_ana_enkf_true = np.full(len(forcing), np.nan)
                 P_ana_est_enkf_true = np.nan
                 P_ana_true_enkf_true = np.nan
                 checkvar_enkf_true = np.nan
+                R_innov_enkf_true = np.nan
 
 
             corr = pd.DataFrame({'truth': sm_true,
                                  'obs': obs,
                                  'OL': OL,
-                                 'ana_madenkf': x_ana_madenkf,
+                                 'ana_madkf': x_ana_madkf,
                                  'ana_enkf_rmsd': x_ana_enkf_rmsd,
                                  'ana_enkf_true': x_ana_enkf_true}).corr()
 
@@ -129,23 +131,26 @@ def run(args):
                                    'Q_true': Q_true,
                                    'P_true': P_true,
                                    'R_est_rmsd': R_est_rmsd,
-                                   'R_est_madenkf': R_est_madenkf,
-                                   'Q_est_madenkf': Q_est_madenkf,
-                                   'H_est_madenkf': H_est_madenkf,
+                                   'R_est_madkf': R_est_madkf,
+                                   'Q_est_madkf': Q_est_madkf,
+                                   'H_est_madkf': H_est_madkf,
                                    'H_true': H_true,
-                                   'checkvar_madenkf': checkvar_madenkf,
+                                   'checkvar_madkf': checkvar_madkf,
                                    'checkvar_enkf_rmsd': checkvar_enkf_rmsd,
                                    'checkvar_enkf_true': checkvar_enkf_true,
+                                   'R_innov_madkf': R_innov_madkf,
+                                   'R_innov_enkf_rmsd': R_innov_enkf_rmsd,
+                                   'R_innov_enkf_true': R_innov_enkf_true,
                                    'P_OL_true': P_OL_true,
-                                   'P_ana_est_madenkf': P_ana_est_madenkf,
-                                   'P_ana_true_madenkf': P_ana_true_madenkf,
+                                   'P_ana_est_madkf': P_ana_est_madkf,
+                                   'P_ana_true_madkf': P_ana_true_madkf,
                                    'P_ana_est_enkf_rmsd': P_ana_est_enkf_rmsd,
                                    'P_ana_true_enkf_rmsd': P_ana_true_enkf_rmsd,
                                    'P_ana_est_enkf_true': P_ana_est_enkf_true,
                                    'P_ana_true_enkf_true': P_ana_true_enkf_true,
                                    'corr_obs': corr['truth']['obs'],
                                    'corr_OL': corr['truth']['OL'],
-                                   'corr_ana_madenkf': corr['truth']['ana_madenkf'],
+                                   'corr_ana_madkf': corr['truth']['ana_madkf'],
                                    'corr_ana_enkf_rmsd': corr['truth']['ana_enkf_rmsd'],
                                    'corr_ana_enkf_true': corr['truth']['ana_enkf_true']}, index=(idx,))
 
