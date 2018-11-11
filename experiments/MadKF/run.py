@@ -46,7 +46,7 @@ def run(cell=None, gpi=None):
         return
 
     smos = SMOS_io()
-    ascat = HSAF_io()
+    ascat = HSAF_io(ext=None)
     mswep = MSWEP_io()
 
     if gpi is not None:
@@ -57,9 +57,9 @@ def run(cell=None, gpi=None):
     R_avg = 74.
 
     if platform.system() == 'Windows':
-        result_file = os.path.join('D:', 'work', 'MadKF', 'API', 'CONUS', 'result_%04i.csv' % cell)
+        result_file = os.path.join('D:', 'work', 'MadKF', 'CONUS', 'result_%04i.csv' % cell)
     else:
-        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadKF', 'API', 'result_%04i.csv' % cell)
+        result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadKF', 'CONUS', 'result_%04i.csv' % cell)
 
     dt = ['2012-01-01','2015-12-31']
 
@@ -127,33 +127,33 @@ def run(cell=None, gpi=None):
 
             # ----- Run KF using TCA-based uncertainties -----
             api_kf = API(gamma=info.gamma, Q=Q_TC)
-            x_kf, P, checkvar_kf, K_kf = \
+            x_kf, P, R_innov_kf, checkvar_kf, K_kf = \
                 KF(api_kf, df[1].values.copy(), df[2].values.copy(), R_TC, H=H_TC)
 
             # ----- Run EnKF using TCA-based uncertainties -----
             forc_pert = ['normal', 'additive', Q_TC]
             obs_pert = ['normal', 'additive', R_TC]
-            x_tc, P, checkvar_tc, K_tc = \
-                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+            x_tc, P, R_innov_tc, checkvar_tc, K_tc = \
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=50)
 
             # ----- Run EnKF using static uncertainties -----
             forc_pert = ['normal', 'additive', Q_avg]
             obs_pert = ['normal', 'additive', R_avg]
-            x_avg, P, checkvar_avg, K_avg = \
-                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+            x_avg, P, R_innov_avg, checkvar_avg, K_avg = \
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=50)
 
             # ----- Run EnKF using RMSD-based uncertainties (corrected for model uncertainty) -----
             t = timeit.default_timer()
             forc_pert = ['normal', 'additive', Q_avg]
             obs_pert = ['normal', 'additive', R_rmsd]
-            x_rmsd, P, checkvar_rmsd, K_rmsd = \
-                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=40)
+            x_rmsd, P, R_innov_rmsd, checkvar_rmsd, K_rmsd = \
+                EnKF(api, df[1].values.copy(), df[2].values.copy(), forc_pert, obs_pert, H=H_TC, n_ens=50)
             t_enkf = timeit.default_timer() - t
 
             # ----- Run MadKF -----
             t = timeit.default_timer()
-            x_madkf, P, R_madkf, Q_madkf, H_madkf, checkvar_madkf, K_madkf = \
-                MadKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=60, n_iter=20)
+            x_madkf, P, R_madkf, Q_madkf, H_madkf, R_innov_madkf, checkvar_madkf, K_madkf = \
+                MadKF(api, df[1].values.copy(), df[2].values.copy(), n_ens=100, n_iter=20)
             t_madkf = timeit.default_timer() - t
 
             # TC evaluation of assimilation results
@@ -171,8 +171,10 @@ def run(cell=None, gpi=None):
                                    'R_tc': R_TC,
                                    'H_tc': H_TC,
                                    'K_tc': K_tc,
+                                   'R_innov_tc': R_innov_tc,
                                    'checkvar_tc': checkvar_tc,
                                    'K_kf': K_kf,
+                                   'R_innov_kf': R_innov_kf,
                                    'checkvar_kf': checkvar_kf,
                                    'K1_2d': K1_2d,
                                    'K2_2d': K2_2d,
@@ -183,15 +185,18 @@ def run(cell=None, gpi=None):
                                    'Q_avg': Q_avg,
                                    'R_avg': R_avg,
                                    'K_avg': K_avg,
+                                   'R_innov_avg': R_innov_avg,
                                    'checkvar_avg': checkvar_avg,
                                    'R_rmsd': R_rmsd,
                                    'K_rmsd': K_rmsd,
+                                   'R_innov_rmsd': R_innov_rmsd,
                                    'checkvar_rmsd': checkvar_rmsd,
                                    'P_madkf': Q_madkf / (1 - info.gamma**2),
                                    'Q_madkf': Q_madkf,
                                    'R_madkf': R_madkf,
                                    'H_madkf': H_madkf,
                                    'K_madkf': K_madkf,
+                                   'R_innov_madkf': R_innov_madkf,
                                    'checkvar_madkf': checkvar_madkf,
                                    't_enkf': t_enkf,
                                    't_madkf': t_madkf,
