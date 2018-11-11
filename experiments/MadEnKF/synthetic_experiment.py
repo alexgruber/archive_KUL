@@ -25,7 +25,7 @@ def main():
 
     args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(4).map(run, args)
+    Pool(12).map(run, args)
 
     # args = [0.8, 1.2, 0.85, 2, 0]
     # run(args)
