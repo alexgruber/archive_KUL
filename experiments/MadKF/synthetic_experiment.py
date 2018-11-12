@@ -15,7 +15,7 @@ from myprojects.readers.gen_syn_data import generate_soil_moisture
 
 def main():
 
-    n_runs = 24*20
+    n_runs = 500
 
     SNR_R = np.random.uniform(0.25, 4, n_runs)
     SNR_P = np.random.uniform(0.25, 4, n_runs)
@@ -25,17 +25,14 @@ def main():
 
     args = zip(SNR_R, SNR_P, gamma, H_true, thread)
 
-    Pool(12).map(run, args)
-
-    # args = [0.8, 1.2, 0.85, 2, 0]
-    # run(args)
+    Pool(10).map(run, args)
 
 def run(args):
 
     if platform.system() == 'Windows':
         root = r'D:\work\MadKF\synthetic_experiment'
     else:
-        root = '/data/leuven/320/vsc32046/projects/MadKF/synthetic_experiment'
+        root = '/scratch/leuven/320/vsc32046/output/MadKF/synthetic_experiment'
 
     SNR_R = args[0]
     SNR_P = args[1]
@@ -45,12 +42,12 @@ def run(args):
 
     fname = os.path.join(root,'result_%i.csv' % thread)
 
-    n = 1500
+    n = 1000
 
     api = API(gamma=gamma)
 
     n_ens_arr = [10, 30, 50, 70]
-    n_iter_arr = [5, 7, 9, 11, 13, 15]
+    n_iter_arr = [3, 6, 9, 12, 15]
 
     idx = thread * len(n_ens_arr) * len(n_iter_arr) - 1
     for n_ens in n_ens_arr:
