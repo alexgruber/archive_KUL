@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 
-def calc_anomaly(Ser, method='harmonic', output='anomaly', longterm=False):
+def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False):
 
     if (output=='climatology')&(longterm is True):
         output = 'climSer'
@@ -106,7 +106,7 @@ def calc_clim_harmonic(Ser, n=3, cutoff=True):
 
     return clim
 
-def calc_clim_moving_average(Ser, window_size=45, n_min=20, return_n=False):
+def calc_clim_moving_average(Ser, window_size=35, n_min=17, return_n=False):
     """
     Calculates the mean seasonal cycle as long-term mean within a moving average window.
 

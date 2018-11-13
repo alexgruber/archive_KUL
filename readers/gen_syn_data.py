@@ -106,7 +106,7 @@ def generate_soil_moisture(size=5000, gamma=0.85, precip=None, scale=15, anomaly
         size = len(precip)
 
     if anomaly is True:
-        precip = calc_anomaly(pd.Series(precip)).values
+        precip = calc_anomaly(pd.Series(precip, index=pd.date_range(start='2010-01-01', periods=size))).values
 
     sm_true = np.zeros(size)
 

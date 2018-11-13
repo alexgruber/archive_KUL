@@ -55,7 +55,7 @@ def run(args):
 
             idx += 1
 
-            sm_true, precip_true = generate_soil_moisture(n, gamma=gamma, scale=7)
+            sm_true, precip_true = generate_soil_moisture(n, gamma=gamma, scale=7, anomaly=True)
 
             R = sm_true.var()/SNR_R
             Q = sm_true.var()/SNR_P * (1-gamma**2)

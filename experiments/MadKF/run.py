@@ -61,7 +61,7 @@ def run(cell=None, gpi=None):
     else:
         result_file = os.path.join('/', 'scratch', 'leuven', '320', 'vsc32046', 'output', 'MadKF', 'CONUS', 'result_%04i.csv' % cell)
 
-    dt = ['2012-01-01','2015-12-31']
+    dt = ['2010-01-01','2015-12-31']
 
     for data, info in mswep.iter_cell(cell, gpis=gpi):
 
