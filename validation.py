@@ -4,34 +4,107 @@ import pandas as pd
 import xarray as xr
 
 from scipy.stats import pearsonr, norm, t, chi
+import scipy.optimize as optimization
 
-from pyldas.interface import LDAS_io
+def tc(df, ref_ind=0):
+
+    cov = df.dropna().cov().values
+
+    ind = (0, 1, 2, 0, 1, 2)
+    no_ref_ind = np.where(np.arange(3) != ref_ind)[0]
+
+    snr = np.array([np.abs(((cov[i, i] * cov[ind[i + 1], ind[i + 2]]) /
+                            (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) - 1)) ** (-1)
+                        for i in np.arange(3)])
+
+    snr_db = 10 * np.log10(snr)
+    R2 = 1. / (1 + snr**(-1))
+
+    err_var = np.array([
+        np.abs(cov[i, i] -
+               (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) / cov[ind[i + 1], ind[i + 2]])
+        for i in np.arange(3)])
+
+    beta = np.array([cov[ref_ind, no_ref_ind[no_ref_ind != i][0]] /
+                     cov[i, no_ref_ind[no_ref_ind != i][0]] if i != ref_ind
+                     else 1 for i in np.arange(3)])
+
+    return snr_db, R2, np.sqrt(err_var) * beta, beta
+
+def estimate_tau(df):
+    """ Estimate characteristic time lengths for pd.DataFrame columns """
+
+    n_lags = 150
+    n_cols = len(df.columns)
+
+    # calculate auto-correlation for different lags
+    rho = np.full((n_cols,n_lags), np.nan)
+    for lag in np.arange(n_lags):
+        df_l = df.copy(); df_l.index = df_l.index + pd.Timedelta(lag, 'D')
+        corr = pd.concat((df, df_l), axis='columns').dropna().corr()
+        for col in np.arange(n_cols):
+            rho[col,lag] = corr.iloc[col,col+n_cols]
+
+    # Fit exponential function to auto-correlations and estimate tau
+    tau = np.full((n_cols,), np.nan)
+    for i in np.arange(n_cols):
+        try:
+            popt = optimization.curve_fit(lambda x, a: np.exp(a * x), np.arange(n_lags), rho[i,:])[0]
+            tau[i] = np.log(np.exp(-1)) / popt
+        except:
+            tau[i] = 1
+            
+    return tau
+
+def estimate_lag1_autocorr(df):
+    """ Estimate geometric average median lag-1 auto-correlation """
+
+    # Get auto-correlation length for all time series
+    tau = estimate_tau(df)
+
+    # Calculate gemetric average lag-1 auto-corr
+    avg_spc_t = np.median((df.index[1::] - df.index[0:-1]).days)
+    ac = np.exp(-avg_spc_t/tau)
+    avg_ac = ac.prod()**(1./len(ac))
+
+    return avg_ac
+
+def calc_bootstrap_blocklength(df):
+    """ Calculate optimal block length [days] for block-bootstrapping of a data frame """
+
+    # Get average lag-1 auto-correlation
+    ac_avg = estimate_lag1_autocorr(df)
+
+    # Estimate block length (maximum 0.8 * data length)
+    bl = min([round((np.sqrt(6) * ac_avg / (1 - ac_avg**2))**(2/3.)*len(df)**(1/3.)), round(0.8*len(df))])
+
+    return bl
+
+def bootstrap(df, bl):
+    """ Bootstrap sample generator for a data frame with given block length [days] """
+
+    N_df = len(df)
+    t = df.index
+    blocks = list()
+
+    # build up list of all blocks (only consider block if number of data is at least half the block length)
+    for i in np.arange(N_df - int(bl / 2.)):
+        ind = np.where((t >= t[i]) & (t < (t[i] + pd.Timedelta(bl, 'D'))))[0]
+        if len(ind) > (bl / 2.):
+            blocks.append(ind)
+    N_blocks = len(blocks)
+
+    # randomly draw a sample of blocks and trim it to df length
+    while True:
+        tmp_ind = np.round(np.random.uniform(0, N_blocks - 1, int(np.ceil(2. * N_df / bl)))).astype('int')
+        ind = [i for block in np.array(blocks)[tmp_ind] for i in block]
+        yield df.iloc[ind[0:N_df],:]
 
 def correct_n(n, df):
-    """ Corrects sample size based on data auto-correlation. """
+    """ Corrects sample size based on avergae lag-1 auto-correlation. """
 
-    # calculate time difference and the average 50% of lags
-    delta = df.index[1::] - df.index[0:-1]
-    lag_l, lag_u = pd.Series(delta).quantile([0.25, 0.75])
-    lags = delta[(delta >= lag_l) & (delta <= lag_u)].unique()
-
-    # Auto-correlation as the average AC of both data sets, averaged over all lags
-    rho = 0.
-    for lag in lags:
-        idx = np.where(delta == lag)[0]
-        rho_ds1, P_ds1 = pearsonr(df.iloc[idx, 0].values, df.iloc[idx + 1, 0].values)
-        rho_ds2, P_ds2 = pearsonr(df.iloc[idx, 1].values, df.iloc[idx + 1, 1].values)
-
-        if (P_ds1 < 0.05) & (rho_ds1 > 0):
-            rho += rho_ds1
-        if (P_ds2 < 0.05) & (rho_ds2 > 0):
-            rho += rho_ds2
-    rho /= 2 * len(lags)
-
-    # --- GDL version: multiply AC of the ts instead of averaging ---
-    #     if (P_ds1 < 0.05) & (rho_ds1 > 0) & (P_ds2 < 0.05) & (rho_ds2 > 0):
-    #         rho += rho_ds1 * rho_ds2
-    # rho /= len(lags)
+    # get geometric average median lag-1 auto-correlation
+    rho = estimate_lag1_autocorr(df)
 
     return round(n * (1 - rho) / (1 + rho))
 
@@ -188,7 +261,6 @@ def ubRMSD(df, dropna=True, alpha=0.05, flatten=True):
 
             # Calculate bias & ubRMSD
             diff = tmpdf[ds1].values - tmpdf[ds2].values
-            bias = diff.mean()
             ubRMSD = diff.std(ddof=1)
 
             chi_l, chi_u = chi.interval(1-alpha, n-1)
@@ -313,8 +385,10 @@ def Pearson_R(df, dropna=True, alpha=0.95, flatten=True):
     return res
 
 
+
 if __name__ == '__main__':
 
+    from pyldas.interface import LDAS_io
     io = LDAS_io('ObsFcstAna','US_M36_SMOS40_DA_cal_scaled')
     ser1 = io.timeseries['obs_fcst'][0,40,40].to_series()
     ser2 = io.timeseries['obs_obs'][0,40,40].to_series()
