@@ -41,7 +41,7 @@ def find_files(path,searchstr):
 
 def merge_files():
 
-    path = r'D:\work\MadKF\synthetic_experiment'
+    path = r'D:\work\MadKF\CONUS\ismn_eval'
     files = find_files(path,'.csv')
 
     result = pd.DataFrame()

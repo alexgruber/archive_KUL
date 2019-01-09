@@ -25,42 +25,65 @@ def tc(df, ref_ind=0):
                (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) / cov[ind[i + 1], ind[i + 2]])
         for i in np.arange(3)])
 
-    beta = np.array([cov[ref_ind, no_ref_ind[no_ref_ind != i][0]] /
+    beta = np.abs(np.array([cov[ref_ind, no_ref_ind[no_ref_ind != i][0]] /
                      cov[i, no_ref_ind[no_ref_ind != i][0]] if i != ref_ind
-                     else 1 for i in np.arange(3)])
+                     else 1 for i in np.arange(3)]))
 
     return snr_db, R2, np.sqrt(err_var) * beta, beta
 
-def estimate_tau(df):
+def estimate_tau(in_df, n_lags=180):
     """ Estimate characteristic time lengths for pd.DataFrame columns """
 
-    n_lags = 150
+    df = in_df.copy().resample('1D').last()
     n_cols = len(df.columns)
 
     # calculate auto-correlation for different lags
     rho = np.full((n_cols,n_lags), np.nan)
     for lag in np.arange(n_lags):
-        df_l = df.copy(); df_l.index = df_l.index + pd.Timedelta(lag, 'D')
-        corr = pd.concat((df, df_l), axis='columns').dropna().corr()
-        for col in np.arange(n_cols):
-            rho[col,lag] = corr.iloc[col,col+n_cols]
+        for i,col in enumerate(df):
+            Ser_l = df[col].copy()
+            Ser_l.index += pd.Timedelta(lag, 'D')
+            rho[i,lag] = df[col].corr(Ser_l)
 
     # Fit exponential function to auto-correlations and estimate tau
-    tau = np.full((n_cols,), np.nan)
+    tau = np.full(n_cols, np.nan)
     for i in np.arange(n_cols):
         try:
-            popt = optimization.curve_fit(lambda x, a: np.exp(a * x), np.arange(n_lags), rho[i,:])[0]
-            tau[i] = np.log(np.exp(-1)) / popt
+            ind = np.where(~np.isnan(rho[i,:]))[0]
+            if len(ind) > 20:
+                popt = optimization.curve_fit(lambda x, a: np.exp(a * x), np.arange(n_lags)[ind], rho[i,ind],
+                                              bounds = [-1., -1. / n_lags])[0]
+                tau[i] = np.log(np.exp(-1.)) / popt
         except:
-            tau[i] = 1
-            
+            # If fit doesn't converge, fall back to the lag where calculated auto-correlation actually drops below 1/e
+            ind = np.where(rho[i,:] < np.exp(-1))[0]
+            tau[i] = ind[0] if (len(ind) > 0) else n_lags # maximum = # calculated lags
+
+    # print tau
+    # import matplotlib.pyplot as plt
+    # xlim = [0,60]
+    # ylim = [-0.4,1]
+    # plt.figure(figsize=(14,9))
+    # for i in np.arange(n_cols):
+    #     plt.subplot(n_cols,1,i+1)
+    #     plt.plot(np.arange(n_lags),rho[i,:])
+    #     plt.plot(np.arange(0,n_lags,0.1),np.exp(-np.arange(0,n_lags,0.1)/tau[i]))
+    #     plt.plot([tau[i],tau[i]],[ylim[0],np.exp(-1)],'--k')
+    #     plt.xlim(xlim)
+    #     plt.ylim(ylim)
+    #     plt.text(xlim[1]-xlim[1]/15.,0.7,df.columns.values[i],fontsize=14)
+    #
+    # plt.tight_layout()
+    # plt.show()
+
     return tau
 
-def estimate_lag1_autocorr(df):
+def estimate_lag1_autocorr(df, tau=None):
     """ Estimate geometric average median lag-1 auto-correlation """
 
     # Get auto-correlation length for all time series
-    tau = estimate_tau(df)
+    if tau is None:
+        tau = estimate_tau(df)
 
     # Calculate gemetric average lag-1 auto-corr
     avg_spc_t = np.median((df.index[1::] - df.index[0:-1]).days)
@@ -69,14 +92,15 @@ def estimate_lag1_autocorr(df):
 
     return avg_ac
 
-def calc_bootstrap_blocklength(df):
+def calc_bootstrap_blocklength(df, avg_ac=None):
     """ Calculate optimal block length [days] for block-bootstrapping of a data frame """
 
     # Get average lag-1 auto-correlation
-    ac_avg = estimate_lag1_autocorr(df)
+    if avg_ac is None:
+        avg_ac = estimate_lag1_autocorr(df)
 
     # Estimate block length (maximum 0.8 * data length)
-    bl = min([round((np.sqrt(6) * ac_avg / (1 - ac_avg**2))**(2/3.)*len(df)**(1/3.)), round(0.8*len(df))])
+    bl = min([round((np.sqrt(6) * avg_ac / (1 - avg_ac**2))**(2/3.)*len(df)**(1/3.)), round(0.8*len(df))])
 
     return bl
 
@@ -85,19 +109,23 @@ def bootstrap(df, bl):
 
     N_df = len(df)
     t = df.index
-    blocks = list()
 
     # build up list of all blocks (only consider block if number of data is at least half the block length)
-    for i in np.arange(N_df - int(bl / 2.)):
-        ind = np.where((t >= t[i]) & (t < (t[i] + pd.Timedelta(bl, 'D'))))[0]
-        if len(ind) > (bl / 2.):
-            blocks.append(ind)
-    N_blocks = len(blocks)
+    if bl > 1:
+        blocks = list()
+        for i in np.arange(N_df - int(bl / 2.)):
+            ind = np.where((t >= t[i]) & (t < (t[i] + pd.Timedelta(bl, 'D'))))[0]
+            if len(ind) > (bl / 2.):
+                blocks.append(ind)
+        N_blocks = len(blocks)
 
     # randomly draw a sample of blocks and trim it to df length
     while True:
-        tmp_ind = np.round(np.random.uniform(0, N_blocks - 1, int(np.ceil(2. * N_df / bl)))).astype('int')
-        ind = [i for block in np.array(blocks)[tmp_ind] for i in block]
+        if bl == 1:
+            ind = np.round(np.random.uniform(0, N_df-1, N_df)).astype('int')
+        else:
+            tmp_ind = np.round(np.random.uniform(0, N_blocks - 1, int(np.ceil(2. * N_df / bl)))).astype('int')
+            ind = [i for block in np.array(blocks)[tmp_ind] for i in block]
         yield df.iloc[ind[0:N_df],:]
 
 def correct_n(n, df):

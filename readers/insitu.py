@@ -70,13 +70,13 @@ class ISMN_io(object):
         self.list['ease_row'] -= self.row_offs
 
 
-    def read(self, network, station, var='soil moisture'):
+    def read(self, network, station, var='soil moisture', surf_depth=0.05):
 
         meta = self.meta[(self.meta['network'] == network) & \
                          (self.meta['station'] == station) & \
                          (self.meta['variable'] == var)]
 
-        surf_files = meta[meta['depth_to'] <= 0.05]['filename']
+        surf_files = meta[meta['depth_to'] <= surf_depth]['filename']
         root_files = meta[meta['depth_to'] <= 1.00]['filename']
         prof_files = meta['filename']
 
@@ -108,10 +108,10 @@ class ISMN_io(object):
                              'sm_rootzone':pd.DataFrame(root).mean(axis=1),
                              'sm_profile':pd.DataFrame(prof).mean(axis=1)})
 
-    def iter_stations(self):
+    def iter_stations(self, surf_depth=0.05):
 
         for idx,station in self.list.iterrows():
-            yield station, self.read(station.network, station.station)
+            yield station, self.read(station.network, station.station, surf_depth=surf_depth)
 
 
 # if __name__=='__main__':
