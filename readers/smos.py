@@ -22,8 +22,10 @@ class SMOS_io(object):
         if root is None:
             if platform.system() == 'Windows':
                 root = os.path.join('D:','data_sets', 'SMOS_L3')
-            else:
+            elif platform.system() == 'Linux':
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'SMOS')
+            else:
+                root = os.path.join('/','data_sets', 'SMOS_L3')
 
         self.loaded_cell=None
         self.ds = None
@@ -36,7 +38,7 @@ class SMOS_io(object):
 
         fname = os.path.join(self.root, '%04i.nc' % cell)
         if not os.path.exists(fname):
-            print 'File not found: ' + fname
+            print('File not found: ' + fname)
             return False
 
         try:
@@ -44,7 +46,7 @@ class SMOS_io(object):
                 self.ds.close()
             self.ds = Dataset(fname)
         except:
-            print 'Corrupted cell: %i' % cell
+            print('Corrupted cell: %i' % cell)
             return False
 
         self.loaded_cell = cell
@@ -104,7 +106,7 @@ def generate_grid_file():
     grid = pd.DataFrame()
 
     for cnt, f in enumerate(files):
-        print '%i / %i' % (cnt, len(files))
+        print('%i / %i' % (cnt, len(files)))
 
         tmp = Dataset(f)
         lats = tmp.variables['lat'][:]
@@ -170,7 +172,7 @@ def generate_cell_files():
     num_dates = date2num(dates, timeunit).astype('int32')
 
     for cell in cells:
-        print cell
+        print(cell)
 
         latmin = dgg_lats[dgg_cells==cell].min(); latmax = dgg_lats[dgg_cells==cell].max()
         lonmin = dgg_lons[dgg_cells==cell].min(); lonmax = dgg_lons[dgg_cells==cell].max()
@@ -182,7 +184,7 @@ def generate_cell_files():
 
         # Read in SMOS native files
         for idx, date in enumerate(dates):
-            print '%i / %i' % (idx, len(dates))
+            print('%i / %i' % (idx, len(dates)))
 
             files = find_files(os.path.join(path_in, date.strftime('%Y')), date.strftime('%Y%m%d'))
             if files is None:
@@ -243,7 +245,7 @@ def extract_L3_tar_files():
     files = find_files(root, '.tgz')
 
     for cnt,f in enumerate(files):
-        print '%i / %i' % (cnt, len(files))
+        print('%i / %i' % (cnt, len(files)))
 
         out_path = os.path.dirname(f).replace('raw', 'unzipped').replace('asc', 'ascdsc').replace('dsc', 'ascdsc')
         if not os.path.exists(out_path):

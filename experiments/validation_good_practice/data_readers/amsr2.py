@@ -62,7 +62,7 @@ def reshuffle_amsr2():
 
     # Fill in result array from orbit files
     for i, f in enumerate(nc_files):
-        print "%i / %i" % (i, len(nc_files))
+        print("%i / %i" % (i, len(nc_files)))
 
         yr = dates[i].year
 

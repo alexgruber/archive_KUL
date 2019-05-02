@@ -20,7 +20,7 @@ def plot_ease_img(data,tag,
                   fontsize=16):
 
     grid = EASE2()
-    lons,lats = np.meshgrid(grid.londim,grid.latdim)
+    lons,lats = np.meshgrid(grid.ease_lons, grid.ease_lats)
 
     ind_lat = data['row'].values.astype('int')
     ind_lon = data['col'].values.astype('int')
@@ -52,21 +52,22 @@ def plot_ease_img(data,tag,
 
 res = pd.read_csv(r"D:\work\sm_memory\v2\result.csv", index_col=0)
 
-plt.figure(figsize = (20,9))
+plt.figure(figsize = (18,4))
 
 # mode = 'anom'
 # cbrange = [0,4]
 
-mode = 'abs'
-cbrange = [0,50]
+mode = 'anom'
+cbrange = [0,3]
 
-sensors = ['AMSR2','SMOS','SMAP','ASCAT','MERRA2']
+# sensors = ['AMSR2','SMOS','SMAP','ASCAT','MERRA2']
+sensors = ['ASCAT','AMSR2','MERRA2']
 
 tags = ['tau_'+mode+'_'+ s for s in sensors]
 
 for i,tag in enumerate(tags):
 
-    plt.subplot(2,3,i+1)
+    plt.subplot(1,3,i+1)
     plot_ease_img(res, tag, cbrange=cbrange, title=sensors[i])
 
 plt.tight_layout()

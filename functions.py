@@ -1,55 +1,30 @@
 
-import os
-import numpy as np
+
 import pandas as pd
 
-def walk_up_folder(path, depth=1):
-    """ Walk up a specific number of sub-directories """
-    _cur_depth = 0
-    while _cur_depth < depth:
-        path = os.path.dirname(path)
-        _cur_depth += 1
-    return path
+from pathlib import Path
 
+def merge_files(path, delete=False):
 
-def remove_fields(nparray, names):
-    """ Remove fields field from a structured numpy array """
+    files = list(path.glob('**/*.csv'))
 
-    fields = list(nparray.dtype.names)
-    for name in names:
-        if name in fields:
-            fields.remove(name)
-    return nparray[fields]
-
-
-def find_files(path,searchstr):
-    """ Recursive file search with a given search string """
-
-    res = []
-    for root, dirs, files in os.walk(path):
-        for f in files:
-            if f.find(searchstr) != -1:
-                res.append(os.path.join(root, f))
-
-    if len(res) == 0:
-        print 'No files found which contain: "' + searchstr + '".'
-        return None
-    elif len(res) == 1:
-        return res[0]
-    else:
-        return np.array(res)
-
-def merge_files():
-
-    path = r'D:\work\MadKF\CONUS\ismn_eval'
-    files = find_files(path,'.csv')
+    fname = path / 'result.csv'
 
     result = pd.DataFrame()
     for f in files:
         tmp = pd.read_csv(f, index_col=0)
         result = result.append(tmp)
 
-    result.to_csv(path + '\\result.csv')
+    result.sort_index().to_csv(fname, float_format='%0.3f')
+
+    if (delete is True) & fname.exists():
+        for f in files:
+            f.unlink()
+    else:
+        print('error creating file.')
 
 if __name__=='__main__':
-    merge_files()
+
+    path = Path('/work/ESA_CCI_SM/sensor_contributions/')
+    merge_files(path)
+

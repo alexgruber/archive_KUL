@@ -3,7 +3,7 @@ import os
 
 import pandas as pd
 
-from myprojects.validation_good_practice.data_readers.interface import reader
+from validation_good_practice.data_readers import reader
 from myprojects.validation import estimate_tau
 
 def estimate_memory():

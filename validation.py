@@ -6,31 +6,6 @@ import xarray as xr
 from scipy.stats import pearsonr, norm, t, chi
 import scipy.optimize as optimization
 
-def tc(df, ref_ind=0):
-
-    cov = df.dropna().cov().values
-
-    ind = (0, 1, 2, 0, 1, 2)
-    no_ref_ind = np.where(np.arange(3) != ref_ind)[0]
-
-    snr = np.array([np.abs(((cov[i, i] * cov[ind[i + 1], ind[i + 2]]) /
-                            (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) - 1)) ** (-1)
-                        for i in np.arange(3)])
-
-    snr_db = 10 * np.log10(snr)
-    R2 = 1. / (1 + snr**(-1))
-
-    err_var = np.array([
-        np.abs(cov[i, i] -
-               (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) / cov[ind[i + 1], ind[i + 2]])
-        for i in np.arange(3)])
-
-    beta = np.abs(np.array([cov[ref_ind, no_ref_ind[no_ref_ind != i][0]] /
-                     cov[i, no_ref_ind[no_ref_ind != i][0]] if i != ref_ind
-                     else 1 for i in np.arange(3)]))
-
-    return snr_db, R2, np.sqrt(err_var) * beta, beta
-
 def estimate_tau(in_df, n_lags=180):
     """ Estimate characteristic time lengths for pd.DataFrame columns """
 
@@ -78,6 +53,7 @@ def estimate_tau(in_df, n_lags=180):
 
     return tau
 
+
 def estimate_lag1_autocorr(df, tau=None):
     """ Estimate geometric average median lag-1 auto-correlation """
 
@@ -90,19 +66,21 @@ def estimate_lag1_autocorr(df, tau=None):
     ac = np.exp(-avg_spc_t/tau)
     avg_ac = ac.prod()**(1./len(ac))
 
-    return avg_ac
+    return avg_ac, avg_spc_t
+
 
 def calc_bootstrap_blocklength(df, avg_ac=None):
     """ Calculate optimal block length [days] for block-bootstrapping of a data frame """
 
     # Get average lag-1 auto-correlation
     if avg_ac is None:
-        avg_ac = estimate_lag1_autocorr(df)
+        avg_ac,_ = estimate_lag1_autocorr(df)
 
     # Estimate block length (maximum 0.8 * data length)
     bl = min([round((np.sqrt(6) * avg_ac / (1 - avg_ac**2))**(2/3.)*len(df)**(1/3.)), round(0.8*len(df))])
 
     return bl
+
 
 def bootstrap(df, bl):
     """ Bootstrap sample generator for a data frame with given block length [days] """
@@ -128,14 +106,40 @@ def bootstrap(df, bl):
             ind = [i for block in np.array(blocks)[tmp_ind] for i in block]
         yield df.iloc[ind[0:N_df],:]
 
+
 def correct_n(n, df):
     """ Corrects sample size based on avergae lag-1 auto-correlation. """
 
     # get geometric average median lag-1 auto-correlation
-    rho = estimate_lag1_autocorr(df)
+    rho,_ = estimate_lag1_autocorr(df)
 
     return round(n * (1 - rho) / (1 + rho))
 
+
+def TCA(df, ref_ind=0):
+
+    cov = df.dropna().cov().values
+
+    ind = (0, 1, 2, 0, 1, 2)
+    no_ref_ind = np.where(np.arange(3) != ref_ind)[0]
+
+    snr = np.array([np.abs(((cov[i, i] * cov[ind[i + 1], ind[i + 2]]) /
+                            (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) - 1)) ** (-1)
+                        for i in np.arange(3)])
+
+    snr_db = 10 * np.log10(snr)
+    R2 = 1. / (1 + snr**(-1))
+
+    err_var = np.array([
+        np.abs(cov[i, i] -
+               (cov[i, ind[i + 1]] * cov[i, ind[i + 2]]) / cov[ind[i + 1], ind[i + 2]])
+        for i in np.arange(3)])
+
+    beta = np.abs(np.array([cov[ref_ind, no_ref_ind[no_ref_ind != i][0]] /
+                     cov[i, no_ref_ind[no_ref_ind != i][0]] if i != ref_ind
+                     else 1 for i in np.arange(3)]))
+
+    return snr_db, R2, np.sqrt(err_var) * beta, beta
 
 def bias(df, dropna=True, alpha=0.05, flatten=True):
     """"
@@ -167,7 +171,7 @@ def bias(df, dropna=True, alpha=0.05, flatten=True):
     """
 
     if not isinstance(df,pd.DataFrame):
-        print 'Error: Input is no pd.DataFrame.'
+        print('Error: Input is no pd.DataFrame.')
         return None
 
     if dropna is True:
@@ -259,7 +263,7 @@ def ubRMSD(df, dropna=True, alpha=0.05, flatten=True):
     """
 
     if not isinstance(df,pd.DataFrame):
-        print 'Error: Input is no pd.DataFrame.'
+        print('Error: Input is no pd.DataFrame.')
         return None
 
     if dropna is True:
@@ -350,7 +354,7 @@ def Pearson_R(df, dropna=True, alpha=0.95, flatten=True):
     """
 
     if not isinstance(df,pd.DataFrame):
-        print 'Error: Input is no pd.DataFrame.'
+        print('Error: Input is no pd.DataFrame.')
         return None
 
     if dropna is True:
@@ -422,8 +426,8 @@ if __name__ == '__main__':
     ser2 = io.timeseries['obs_obs'][0,40,40].to_series()
     df = pd.DataFrame([ser1,ser2]).swapaxes(0,1)
 
-    print bias(df)
-    print ubRMSD(df)
-    print Pearson_R(df)
+    print(bias(df))
+    print(ubRMSD(df))
+    print(Pearson_R(df))
     # for val in res.loc['obs_ana','obs_fcst',:]:
     #     print val.values

@@ -25,10 +25,10 @@ def plot_ease_img(data,tag,
                   cmap='YlGn',
                   plot_cb =True,
                   title='',
-                  fontsize=14):
+                  fontsize=12):
 
     grid = EASE2()
-    lons,lats = np.meshgrid(grid.londim,grid.latdim)
+    lons,lats = np.meshgrid(grid.ease_lons, grid.ease_lats)
 
     ind_lat = data['row'].values.astype('int')
     ind_lon = data['col'].values.astype('int')
@@ -51,30 +51,71 @@ def plot_ease_img(data,tag,
 
     if plot_cb is True:
         # colorbar(im)
+        # cb = m.colorbar(im, "bottom", size="7%", pad=0.05, ticks=[0,1,2])
+        # cb.ax.set_xticklabels(['ASC','no sig. diff', 'AMS'])
         cb = m.colorbar(im, "bottom", size="7%", pad=0.05)
         for t in cb.ax.get_xticklabels():
             t.set_fontsize(fontsize)
         for t in cb.ax.get_yticklabels():
             t.set_fontsize(fontsize)
 
+
     if title != '':
         plt.title(title,fontsize=fontsize)
 
+def plot_matches():
 
-def plot_ci_test():
+    res = pd.read_csv(r"D:\work\validation_good_practice\confidence_invervals\result.csv",index_col=0)
+
+    plt.figure(figsize=(14,8))
+
+    plt.subplot(221)
+    plot_ease_img(res, 'n_abs', cbrange=[0,800], title='# matches (abs)', cmap='jet')
+
+    plt.subplot(222)
+    plot_ease_img(res, 'n_anom', cbrange=[0,800], title='# matches (anom)', cmap='jet')
+
+    plt.subplot(223)
+    plot_ease_img(res, 'dt_opt', cbrange=[0,24], title='matching window center (abs)', cmap='jet')
+
+    plt.subplot(224)
+    plot_ease_img(res, 'dt_opt_anom', cbrange=[0,24], title='matching window center (anom)', cmap='jet')
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_blocklength():
+
+    res = pd.read_csv(r"D:\work\validation_good_practice\confidence_invervals\result.csv",index_col=0)
+
+    plt.figure(figsize=(14,5))
+
+    plt.subplot(121)
+    plot_ease_img(res, 'bl_opt', cbrange=[0,100], title='Blocklength (abs)', cmap='jet')
+
+    plt.subplot(122)
+    plot_ease_img(res, 'bl_opt_anom', cbrange=[0,16], title='Blocklength (anom)', cmap='jet')
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_ci_l_50_u():
 
     res = pd.read_csv(r'D:\work\validation_good_practice\confidence_invervals\result.csv',index_col=0)
 
-    block_lengths = ['1', '5', '10', '15', '25', '50', 'opt']
-    # block_lengths_anom = ['1', '2', '3', '5', '8', '15', 'opt']
+    block_lengths = ['1', '10', '25', '50', 'opt']
+    block_lengths_anom = ['1', '5', '15', '25', 'opt']
+
     sensors = ['ASCAT','AMSR2','MERRA2']
     modes = ['ci_l', 'p50', 'ci_u']
-    metrics = ['r2', 'ubrmse']
+    # metrics = ['r2', 'ubrmse']
+    metrics = ['ubrmse',]
 
     for met in metrics:
 
-        cbrange = [0, 1] if met == 'r2' else [0, 0.25]
-        cmap = 'YlGn' if met == 'r2' else 'YlOrRd'
+        cbrange = [0, 1] if met == 'r2' else [0, 0.08]
+        # cmap = 'YlGn' if met == 'r2' else 'YlOrRd'
+        cmap = 'RdYlGn' if met == 'r2' else 'RdYlGn_r'
         # ------------------------------------------------------------------------------------------------------------------
         f = plt.figure(figsize=(17,7))
 
@@ -117,7 +158,7 @@ def plot_ci_test():
             plt.close()
 
         # ------------------------------------------------------------------------------------------------------------------
-        for bl in block_lengths:
+        for bl in block_lengths_anom:
             f = plt.figure(figsize=(17,9))
 
             for i,m in enumerate(modes):
@@ -137,13 +178,13 @@ def plot_ci_test():
             plt.savefig(r'D:\work\validation_good_practice\confidence_invervals\plots' + '\\' + met + '_anom_bl_' + bl + '.png', dpi=f.dpi)
             plt.close()
 
-def plot_ci_test2():
+def plot_ci_width():
 
-    res = pd.read_csv(r'D:\work\validation_good_practice\confidence_invervals\result.csv',index_col=0)
+    res = pd.read_csv(r"D:\work\validation_good_practice\confidence_invervals\result.csv",index_col=0)
 
-    # block_lengths = ['1', '5', '10', '15', '25', '50', 'opt']
-    block_lengths = ['1', '10', '25', 'opt']
     sensors = ['ASCAT','AMSR2','MERRA2']
+    block_lengths = ['1', '25', '50', 'opt']
+    block_lengths_anom = ['1', '15', '25', 'opt']
 
     metrics = ['r2', 'ubrmse']
 
@@ -159,7 +200,8 @@ def plot_ci_test2():
 
             for i,s in enumerate(sensors):
 
-                for j, bl in enumerate(block_lengths):
+                lengths = block_lengths if freq == 'abs' else block_lengths_anom
+                for j, bl in enumerate(lengths):
 
                     tagu = met + '_' + freq + '_' + s + '_ci_u_bl_' + bl
                     tagl = met + '_' + freq + '_' + s + '_ci_l_bl_' + bl
@@ -180,8 +222,58 @@ def plot_ci_test2():
             plt.savefig(r'D:\work\validation_good_practice\confidence_invervals\plots' + '\\CI_' + met + '_' + freq + '.png', dpi=f.dpi)
             plt.close()
 
+def plot_ci_width_hist():
 
-def plot_ci_test3():
+    res = pd.read_csv(r'D:\work\validation_good_practice\confidence_invervals\result.csv',index_col=0)
+
+    sensors = ['ASCAT','AMSR2','MERRA2']
+    block_lengths = ['1', '10', '25', 'opt']
+    block_lengths_anom = ['1', '5', '15', 'opt']
+
+
+    metrics = ['r2', 'ubrmse']
+
+    for met in metrics:
+
+        cbrange = [0, 1] if met == 'r2' else [0, 0.1]
+        fontsize = 14
+
+        # ------------------------------------------------------------------------------------------------------------------
+        for freq in ['abs', 'anom']:
+
+            f = plt.figure(figsize=(20,8))
+
+            for i,s in enumerate(sensors):
+
+                lengths = block_lengths if freq == 'abs' else block_lengths_anom
+                for j, bl in enumerate(lengths):
+
+                    tagu = met + '_' + freq + '_' + s + '_ci_u_bl_' + bl
+                    tagl = met + '_' + freq + '_' + s + '_ci_l_bl_' + bl
+                    tagci = met + '_' + freq + '_' + s + '_ci_bl_' + bl
+
+                    res[tagci] = res[tagu] - res[tagl]
+
+                    plt.subplot(3, len(block_lengths), len(block_lengths) * i + (j + 1))
+
+                    if j == 0:
+                        plt.text(-0.5e6, 2.2e6, s, fontsize=16, rotation=90)
+
+                    h = res[tagci].hist(bins=20, range=cbrange, density=True)
+                    for t in h.get_xticklabels():
+                        t.set_fontsize(fontsize-2)
+                    for t in h.get_yticklabels():
+                        t.set_fontsize(fontsize-2)
+                    if i == 0:
+                        plt.title('bl_' + bl, fontsize=fontsize)
+                    if j == 0:
+                        plt.ylabel(s, fontsize=fontsize)
+
+            plt.savefig(r'D:\work\validation_good_practice\confidence_invervals\plots' + '\\CI_hist_' + met + '_' + freq + '.png', dpi=f.dpi)
+            plt.close()
+
+
+def plot_ci_width_bl_dependence():
 
     res = pd.read_csv(r'D:\work\validation_good_practice\confidence_invervals\result.csv',index_col=0)
 
@@ -199,9 +291,11 @@ def plot_ci_test3():
         for i,s in enumerate(sensors):
             for j,freq in enumerate(['abs', 'anom']):
 
-                tagu = met + '_' + freq + '_' + s + '_ci_u_bl_50'
-                tagl = met + '_' + freq + '_' + s + '_ci_l_bl_50'
-                tagci50 = met + '_' + freq + '_' + s + '_ci_bl_50'
+                bl = '50' if freq == 'abs' else '25'
+
+                tagu = met + '_' + freq + '_' + s + '_ci_u_bl_' + bl
+                tagl = met + '_' + freq + '_' + s + '_ci_l_bl_' + bl
+                tagci50 = met + '_' + freq + '_' + s + '_ci_bl_' + bl
                 res[tagci50] = res[tagu] - res[tagl]
 
                 tagu = met + '_' + freq + '_' + s + '_ci_u_bl_1'
@@ -227,7 +321,58 @@ def plot_ci_test3():
         plt.close()
 
 
+def plot_significant_differences():
+
+    res = pd.read_csv(r"D:\work\validation_good_practice\confidence_invervals\result.csv",index_col=0)
+
+    block_lengths = ['1', '10', '25', 'opt']
+    block_lengths_anom = ['1', '5', '15', 'opt']
+
+    for met in ['r2', 'ubrmse']:
+
+        f = plt.figure(figsize=(13,4))
+
+        for i, freq in enumerate(['abs', 'anom']):
+
+            lengths = block_lengths if freq == 'abs' else block_lengths_anom
+            for j, bl in enumerate(lengths):
+
+                tagu_asc = met + '_' + freq + '_ASCAT_ci_u_bl_' + bl
+                tagl_asc = met + '_' + freq + '_ASCAT_ci_l_bl_' + bl
+
+                tagu_ams = met + '_' + freq + '_AMSR2_ci_u_bl_' + bl
+                tagl_ams = met + '_' + freq + '_AMSR2_ci_l_bl_' + bl
+
+                res['sig'] = np.nan
+
+                if met == 'r2':
+                    res.loc[res[tagu_ams] <= res[tagl_asc],'sig'] = 0
+                    res.loc[(res[tagu_ams] > res[tagl_asc])&(res[tagu_asc] > res[tagl_ams]),'sig'] = 1
+                    res.loc[res[tagu_asc] <= res[tagl_ams],'sig'] = 2
+                else:
+                    res.loc[res[tagu_ams] <= res[tagl_asc],'sig'] = 2
+                    res.loc[(res[tagu_ams] > res[tagl_asc])&(res[tagu_asc] > res[tagl_ams]),'sig'] = 1
+                    res.loc[res[tagu_asc] <= res[tagl_ams],'sig'] = 1
+
+                plt.subplot(2, 4, 4 * i + (j + 1))
+                plt.xticks([0,1,2],[0,1,2])
+
+                title = 'bl_' + bl if i == 0 else ''
+                plot_cb = True if (i == 1) else False
+
+                if j == 0:
+                    plt.text(-0.7e6, 2.1e6, freq, fontsize=16, rotation=90)
+
+                plot_ease_img(res, 'sig', cbrange=[0, 2], title=title, plot_cb=plot_cb, cmap='brg')
+
+        plt.savefig(r'D:\work\validation_good_practice\confidence_invervals\significant_differences' + '\\' + met + '.png', dpi=f.dpi)
+        plt.close()
+
+
 if __name__=='__main__':
-    plot_ci_test3()
-
-
+    # plot_ci_l_50_u()
+    # plot_ci_width()
+    # plot_ci_width_hist()
+    # plot_ci_width_bl_dependence()
+    # plot_significant_differences()
+    plot_blocklength()

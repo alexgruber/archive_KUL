@@ -27,8 +27,8 @@ def plot_increments():
 
     print np.nanmean(incr_var_cal), np.nanmean(incr_var_uncal)
 
-    tc = LDAS_io().tilecoord
-    tg = LDAS_io().tilegrids
+    tc = LDAS_io().grid.tilecoord
+    tg = LDAS_io().grid.tilegrids
 
     tc.i_indg -= tg.loc['domain', 'i_offg']  # col / lon
     tc.j_indg -= tg.loc['domain', 'j_offg']  # row / lat
@@ -444,8 +444,8 @@ def plot_model_parameters():
     cal = LDAS_io(exp='US_M36_SMOS_DA_calibrated_scaled').read_params('RTMparam')
     uncal = LDAS_io(exp='US_M36_SMOS_DA_nocal_scaled_pentadal').read_params('RTMparam')
 
-    tc = LDAS_io().tilecoord
-    tg = LDAS_io().tilegrids
+    tc = LDAS_io().grid.tilecoord
+    tg = LDAS_io().grid.tilegrids
 
     tc.i_indg -= tg.loc['domain', 'i_offg']  # col / lon
     tc.j_indg -= tg.loc['domain', 'j_offg']  # row / lat

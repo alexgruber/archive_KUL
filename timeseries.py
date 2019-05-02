@@ -2,6 +2,8 @@
 import numpy as np
 import pandas as pd
 
+import logging
+
 
 def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False):
 
@@ -17,7 +19,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False)
     climSer = pd.Series(index=xSer.index)
 
     if not method in ['harmonic','mean','moving_average','ma']:
-        print 'Unknown method: ' + method
+        logging.error('Unknown method: ' + method)
         return climSer
 
     if longterm is True:
@@ -45,6 +47,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False)
     if output == 'climSer':
         return climSer
 
+    climSer.name = xSer.name
     return xSer - climSer
 
 

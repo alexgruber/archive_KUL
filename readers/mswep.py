@@ -19,6 +19,11 @@ from myprojects.functions import find_files
 from scipy.optimize import fminbound
 from scipy.stats import pearsonr
 
+os.environ["PROJ_LIB"] = "/Users/u0116961/miniconda2/pkgs/proj4-5.2.0-h1de35cc_1001/share/proj"
+if platform.system() == 'Darwin':
+    import matplotlib
+    matplotlib.use("TkAgg")
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
@@ -30,8 +35,10 @@ class MSWEP_io(object):
         if root is None:
             if platform.system() == 'Windows':
                 root = os.path.join('D:','data_sets', 'MSWEP_v21')
-            else:
+            elif platform.system() == 'Linux':
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'MSWEP')
+            else:
+                root = os.path.join('/', 'data_sets', 'MSWEP_v21')
 
         if cellfiles is True:
             self.root = os.path.join(root, 'cellfiles')
@@ -47,7 +54,7 @@ class MSWEP_io(object):
 
         fname = os.path.join(self.root, '%04i.nc' % cell)
         if not os.path.exists(fname):
-            print 'File not found: ' + fname
+            print('File not found: ' + fname)
             return False
 
         try:
@@ -55,7 +62,7 @@ class MSWEP_io(object):
                 self.ds.close()
             self.ds = Dataset(fname)
         except:
-            print 'Corrupted cell: %i' % cell
+            print('Corrupted cell: %i' % cell)
             return False
 
         self.loaded_cell = cell
@@ -277,7 +284,7 @@ def combine_tile_files():
             for c, lon in enumerate(tmp_lons):
 
                 i += 1
-                print '%i / %i' % (i, n_gp)
+                print('%i / %i' % (i, n_gp))
 
                 if (lat<25.) | (lat>49.) | (lon<-124.5) | (lon>-67):
                     continue
@@ -329,7 +336,7 @@ def append_smos_gpis():
     lons = grid_smos['lon'].values
 
     for cnt, (gpi, data) in enumerate(grid_mswep.iterrows()):
-        print '%i / %i' % (cnt, len(grid_mswep))
+        print('%i / %i' % (cnt, len(grid_mswep)))
 
         r = np.sqrt((lats - data.lat) ** 2 + (lons - data.lon) ** 2)
         grid_mswep.loc[gpi, 'smos_gpi'] = grid_smos.iloc[np.where(abs(r - r.min()) < 0.0001)[0][0],:].name
@@ -362,7 +369,7 @@ def calc_gamma_map():
     mswep.grid['gamma'] = np.nan
 
     for i, (precip, info) in enumerate(mswep.iter_gp()):
-        print i
+        print(i)
 
         if len(precip.dropna()) == 0:
             continue

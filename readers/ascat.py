@@ -17,8 +17,10 @@ class HSAF_io(object):
         if root is None:
             if platform.system() == 'Windows':
                 root = os.path.join('D:','data_sets', 'ASCAT')
-            else:
+            elif platform.system() == 'Linux':
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'ASCAT')
+            else:
+                root = os.path.join('/','data_sets', 'ASCAT')
 
         self.data_path = os.path.join(root, version)
         self.version = version.upper()
@@ -43,7 +45,7 @@ class HSAF_io(object):
 
         fname = os.path.join(self.data_path, self.version + '_%04i.nc' % cell)
         if not os.path.exists(fname):
-            print 'File not found: ' + fname
+            print('File not found: ' + fname)
             return False
 
         try:
@@ -51,7 +53,7 @@ class HSAF_io(object):
                 self.fid.close()
             self.fid = Dataset(fname)
         except:
-            print 'Corrupted cell: %i' % cell
+            print('Corrupted cell: %i' % cell)
             return False
 
         self.loaded_cell = cell
@@ -61,7 +63,7 @@ class HSAF_io(object):
     def read(self, gpi, resample_time=True):
 
         if not gpi in self.gpis:
-            print 'GPI not found'
+            print('GPI not found')
             return None
 
         cell = self.cells[self.gpis==gpi][0]
@@ -82,7 +84,7 @@ class HSAF_io(object):
         ind_valid = ((corr_flag==0)|(corr_flag==4)) & (conf_flag == 0) & (proc_flag == 0) & (ssf == 1)
 
         if len(np.where(ind_valid)[0]) == 0:
-            print 'No valid data for gpi %i' % gpi
+            print('No valid data for gpi %i' % gpi)
             return None
 
         sm = self.fid['sm'][start:end][ind_valid]
@@ -123,7 +125,7 @@ def append_ease_gpis():
     i = 0
     for idx, info in gpi_list.iterrows():
         i += 1
-        print '%i / %i' % (i, len(gpi_list))
+        print('%i / %i' % (i, len(gpi_list)))
 
         col, row = LDAS.grid.lonlat2colrow(gpi_list.loc[idx, 'lon'], gpi_list.loc[idx, 'lat'], domain=True)
 
