@@ -13,13 +13,13 @@ from mpl_toolkits.basemap import Basemap
 
 from pyldas.interface import LDAS_io
 
-from myprojects.timeseries import calc_clim_harmonic, calc_pentadal_mean
+from myprojects.timeseries import calc_clim_harmonic, calc_clim_moving_average
 
 def plot_scaling_parameters():
 
     fname = r"D:\data_sets\LDAS_runs\US_M36_SMOS_noDA_cal_unscaled\obs_scaling\7Thv_TbSM_001_SMOS_zscore_stats_2010_p37_2015_p36_hscale_0.00_W_9p_Nmin_20_A_p01_y2010.bin"
 
-    io = LDAS_io('scale')
+    io = LDAS_io('scaling ')
 
     res = io.read_scaling_parameters(fname=fname)
 
@@ -80,7 +80,7 @@ def plot_scaling_parameters():
 def plot_Tb_clims():
 
     ts = LDAS_io('ObsFcstAna', exp='US_M36_SMOS_noDA_unscaled').timeseries
-    data = pd.DataFrame(index=ts.time)
+    data = pd.DataFrame(index=ts.time.values)
     data['obs'] = pd.to_numeric(ts['obs_obs'][8,45,30].values,errors='coerce')
     data['fcst'] = pd.to_numeric(ts['obs_fcst'][8,45,30].values,errors='coerce')
 
@@ -102,8 +102,8 @@ def plot_Tb_clims():
     arr = data['obs'].copy()
     clim = pd.DataFrame(index=np.arange(365)+1)
     for n in [0,1,2,3,10,]:
-        clim[n] = calc_clim(arr,n=n)
-    clim['pentad_mean'] = calc_pentadal_mean(arr)[0]
+        clim[n] = calc_clim_harmonic(arr,n=n)
+    clim['moving_average'] = calc_clim_moving_average(arr,window_size=45)
     clim.plot(linewidth=2,ax=ax)
     ax.set_xlim((0,365))
     ax.set_ylim((180,285))
@@ -136,8 +136,8 @@ def plot_Tb_clims():
     arr = data['fcst'].copy()
     clim = pd.DataFrame(index=np.arange(365)+1)
     for n in [0,1,2,3,10,]:
-        clim[n] = calc_clim(arr,n=n)
-    clim['pentad_mean'] = calc_pentadal_mean(arr)[0]
+        clim[n] = calc_clim_harmonic(arr,n=n)
+    clim['moving_average'] = calc_clim_moving_average(arr,window_size=45)
     clim.plot(linewidth=2,ax=ax)
     ax.set_xlim((0,365))
     ax.set_ylim((190,250))
@@ -162,4 +162,5 @@ def plot_Tb_clims():
     plt.show()
 
 if __name__=='__main__':
-    plot_scaling_parameters()
+    # plot_scaling_parameters()
+    plot_Tb_clims()

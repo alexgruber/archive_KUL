@@ -34,7 +34,7 @@ def main(part):
     end = subs[part]
     cells = cells[start:end]
 
-    print cells
+    print(cells)
 
     for cell in np.atleast_1d(cells):
        run(cell=cell)
@@ -42,7 +42,7 @@ def main(part):
 def run(cell=None, gpi=None):
 
     if (cell is None) and (gpi is None):
-        print 'No cell/gpi specified.'
+        print('No cell/gpi specified.')
         return
 
     smos = SMOS_io()
@@ -210,7 +210,7 @@ def run(cell=None, gpi=None):
             else:
                 result.to_csv(result_file, float_format='%0.4f', mode='a', header=False)
         except:
-            print 'GPI failed.'
+            print('GPI failed.')
             continue
 
     ascat.close()

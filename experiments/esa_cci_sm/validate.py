@@ -64,14 +64,14 @@ def run(part):
         res[col] = 0
 
     for i, (meta, ts_insitu) in enumerate(ismn.iter_stations()):
-        print '%i/%i (Proc %i)' % (i, len(ismn.list), part)
+        print('%i/%i (Proc %i)' % (i, len(ismn.list), part))
 
         if ts_insitu is None:
-            print 'No in situ data for ' + meta.network + ' / ' + meta.station
+            print('No in situ data for ' + meta.network + ' / ' + meta.station)
             continue
         ts_insitu = ts_insitu[periods['p1'][0]:periods['p4'][1]]
         if len(ts_insitu) < 10:
-            print 'No in situ data for ' + meta.network + ' / ' + meta.station
+            print('No in situ data for ' + meta.network + ' / ' + meta.station)
             continue
         df_insitu = pd.DataFrame(ts_insitu).dropna()
         df_insitu_anom = pd.DataFrame(calc_anomaly(ts_insitu)).dropna()
@@ -79,7 +79,7 @@ def run(part):
         for m in cci.modes:
             df_cci = cci.read(meta.lon,meta.lat, mode=m).dropna()
             if len(df_cci) < 10:
-                print 'No CCI ' + m + ' data for ' + meta.network + ' / ' + meta.station
+                print('No CCI ' + m + ' data for ' + meta.network + ' / ' + meta.station)
                 continue
 
             for f in freq:
@@ -90,7 +90,7 @@ def run(part):
                         df_cci.loc[:, m + '_' + v] = calc_anomaly(df_cci[m + '_' + v])
                     df_cci.dropna(inplace=True)
                     if (len(df_cci) < 10) | (len(df_insitu_anom) < 10):
-                        print 'No in situ or CCI ' + m + ' anomaly data for ' + meta.network + ' / ' + meta.station
+                        print('No in situ or CCI ' + m + ' anomaly data for ' + meta.network + ' / ' + meta.station)
                         continue
                     matched = df_match(df_cci, df_insitu_anom, window=0.5)
 

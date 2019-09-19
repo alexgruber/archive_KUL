@@ -368,6 +368,74 @@ def plot_significant_differences():
         plt.savefig(r'D:\work\validation_good_practice\confidence_invervals\significant_differences' + '\\' + met + '.png', dpi=f.dpi)
         plt.close()
 
+# def validation_protocol_graphic:
+    # def calc_anom(Ser, longterm=False, window_size=35):
+    #
+    #     xSer = Ser.dropna().copy()
+    #     if len(xSer) == 0:
+    #         return xSer
+    #
+    #     doys = xSer.index.dayofyear.values
+    #     doys[xSer.index.is_leap_year & (doys > 59)] -= 1
+    #     climSer = pd.Series(index=xSer.index, name=xSer.name)
+    #
+    #     if longterm is True:
+    #         climSer[:] = calc_clim(xSer, window_size=window_size)[doys]
+    #     else:
+    #         years = xSer.index.year
+    #         for yr in np.unique(years):
+    #             clim = calc_clim(xSer[years == yr], window_size=window_size)
+    #             climSer[years == yr] = clim[doys[years == yr]].values
+    #
+    #     return xSer - climSer, climSer
+
+    # grid = pd.read_csv('/data_sets/EASE2_grid/grid_lut.csv', index_col=0)
+    #
+    #
+    # lon = -101.139783
+    # lat = 38.322267
+    #
+    # gpi = grid.index[np.argmin((grid.ease2_lon.values - lon) ** 2 + (grid.ease2_lat.values - lat) ** 2)]
+
+    # sensors = ['SMAP','ISMN',]
+    # io = reader()
+    # data = io.read(83065)
+
+    # data['SMAP'] = calc_anom(data['SMAP'], window_size=5)[1]
+    # data /= 2
+    # data['SMAP'] += 0.07
+    # data['ISMN'] /= 1.5
+    # data['ISMN_scl'] = (data['ISMN'] - data['ISMN'].mean()) / data['ISMN'].std() * data['SMAP'].std() + data['SMAP'].mean()
+    # plt.figure(figsize=(15,5))
+    # plt.plot(data.index, data['SMAP'], color='green', linewidth=3)
+    # plt.plot(data.index, data['ISMN'], color='red', linewidth=3)
+    # plt.plot(data.index, data['ISMN_scl'], ':', color='red', linewidth=4)
+    # plt.show()
+
+    # data['SMAP'] = calc_anom(data['SMAP'], window_size=3)[1]
+    # data /= 2
+    # data['SMAP'] += 0.07
+    #
+    # data['SMAP_anom'], data['SMAP_clim'] = calc_anom(data['SMAP'], window_size=40)
+    #
+    # plt.figure(figsize=(15,10))
+    #
+    # plt.subplot(2,1,1)
+    # plt.plot(data.index, data['SMAP'], color='green', linewidth=4)
+    # # plt.axhline(color='black', linestyle='--', linewidth=1)
+    # # plt.ylim((-0.05, 0.23))
+    #
+    #
+    # plt.subplot(2,1,2)
+    # plt.plot(data.index, data['SMAP_clim'], color='green', linewidth=4)
+    # plt.plot(data.index, data['SMAP_anom'], color='green', linewidth=4)
+    # # plt.axhline(color='black', linestyle='--', linewidth=1)
+    # # plt.ylim((-0.05, 0.23))
+    #
+    # plt.tight_layout()
+    # plt.show()
+    #
+
 
 if __name__=='__main__':
     # plot_ci_l_50_u()
