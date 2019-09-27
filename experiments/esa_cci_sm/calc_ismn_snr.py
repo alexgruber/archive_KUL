@@ -54,21 +54,21 @@ def run(part):
     res['r_anom'] = np.nan
 
     for i, (meta, ts_insitu) in enumerate(ismn.iter_stations()):
-        print '%i/%i (Proc %i)' % (i, len(ismn.list), part)
+        print('%i/%i (Proc %i)' % (i, len(ismn.list), part))
 
         if ts_insitu is None:
-            print 'No in situ data for ' + meta.network + ' / ' + meta.station
+            print('No in situ data for ' + meta.network + ' / ' + meta.station)
             continue
         ts_insitu = ts_insitu['2007-10-01':'2014-12-31']
         if len(ts_insitu) < 10:
-            print 'No in situ data for ' + meta.network + ' / ' + meta.station
+            print('No in situ data for ' + meta.network + ' / ' + meta.station)
             continue
         df_insitu = pd.DataFrame(ts_insitu).dropna()
         df_insitu_anom = pd.DataFrame(calc_anomaly(ts_insitu)).dropna()
 
         df_cci = cci.read(meta.lon,meta.lat, version='v04.4', mode=['ACTIVE','PASSIVE']).dropna()
         if len(df_cci) < 10:
-            print 'No CCI data for ' + meta.network + ' / ' + meta.station
+            print('No CCI data for ' + meta.network + ' / ' + meta.station)
             continue
 
         for f in freq:
@@ -79,7 +79,7 @@ def run(part):
                 df_cci.loc[:, 'PASSIVE_v04.4'] = calc_anomaly(df_cci['PASSIVE_v04.4'])
                 df_cci.dropna(inplace=True)
                 if (len(df_cci) < 10) | (len(df_insitu_anom) < 10):
-                    print 'No in situ or CCI anomaly data for ' + meta.network + ' / ' + meta.station
+                    print('No in situ or CCI anomaly data for ' + meta.network + ' / ' + meta.station)
                     continue
                 matched = df_match(df_cci, df_insitu_anom, window=0.5)
 

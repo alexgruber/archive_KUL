@@ -12,15 +12,15 @@ from pyldas.visualize.plots import plot_ease_img
 
 def plot_image():
 
-    exp = 'US_M36_SMOS40_TB_ens_test_OL'
-    param = 'ObsFcstAna'
+    # exp = 'US_M36_SMOS40_TB_ens_test_OL'
+    # param = 'ObsFcstAna'
 
-    io = LDAS_io(param, exp)
+    io = LDAS_io()
 
     # fname = '/data_sets/LDAS_runs/US_M36_SMOS40_TB_ens_test_DA/output/SMAP_EASEv2_M36_US/ana/ens0008/Y2013/M10/US_M36_SMOS40_TB_ens_test_DA.ens0008.ldas_ObsFcstAnaEns.20131014_1200z.bin'
     # fname = '/Users/u0116961/Desktop/temp/US_M36_SMOS40_TB_ens_test_DA2.ens0000.ldas_ObsFcstAnaEns.20100114_1200z.bin'
 
-    fname = '/work/MadKF/CLSM/error_files/SMOS_fit_Tb_D.bin'
+    fname = '/work/MadKF/CLSM/iter_2/error_files/SMOS_fit_Tb_A.bin'
 
     dtype, hdr, length = template_error_Tb40()
     img = io.read_fortran_binary(fname, dtype, hdr=hdr, length=length)
