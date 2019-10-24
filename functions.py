@@ -6,8 +6,9 @@ from pathlib import Path
 
 def merge_files(path, delete=False):
 
-    files = list(path.glob('**/*.csv'))
+    path = Path(path)
 
+    files = path.glob('**/*.csv')
     fname = path / 'result.csv'
 
     result = pd.DataFrame()
@@ -20,11 +21,9 @@ def merge_files(path, delete=False):
     if (delete is True) & fname.exists():
         for f in files:
             f.unlink()
-    else:
-        print('error creating file.')
 
 if __name__=='__main__':
 
-    path = Path('/work/ESA_CCI_SM/sensor_contributions/')
+    path = '/work/GLEAM/perturbation_correction'
     merge_files(path)
 

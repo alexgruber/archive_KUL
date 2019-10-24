@@ -19,15 +19,11 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-
-            if platform.system() == 'Windows':
-                self.root = os.path.join('D:', 'data_sets', 'ISMN_global_20071003_20141231')
-            else:
-                self.root = os.path.join('/', 'data_sets', 'ISMN_global_20071003_20141231')
+            self.root = os.path.join('/', 'data_sets', 'ISMN_CONUS_2010001_20181101')
         else:
             self.root = path
 
-        self.meta_file = os.path.join(self.root, 'meta2.bin')
+        self.meta_file = os.path.join(self.root, 'meta.bin')
         if not os.path.exists(self.meta_file):
             print('Meta file does not exist.')
             self.meta = None

@@ -12,7 +12,7 @@ from netCDF4 import Dataset, num2date
 
 from pygleam_ag.GLEAM_model import GLEAM
 from pygleam_ag.GLEAM_IO import output_ts
-from pygleam_ag.grid import get_valid_gpis
+from pygleam_ag.grid import get_valid_gpis, read_grid
 
 import pygeogrids.netcdf as ncgrid
 from smecv.common_format import CCIDs
@@ -26,6 +26,8 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 
 from scipy.ndimage import gaussian_filter
+
+from scipy.optimize import curve_fit
 
 
 def proc(function, procs = 30):
@@ -45,14 +47,16 @@ def proc(function, procs = 30):
         p.map(function, gpi_subs)
 
 
-def write_output(fname,out_dict,gpi):
+def write_output(fname,out_dict,gpi,precision=4):
 
     output = pd.DataFrame(out_dict, index=(gpi,))
 
+    f = '%0.' + str(precision) + 'f'
+
     if not fname.exists():
-        output.to_csv(fname, float_format='%0.4f')
+        output.to_csv(fname, float_format=f)
     else:
-        output.to_csv(fname, float_format='%0.4f', mode='a', header=False)
+        output.to_csv(fname, float_format=f, mode='a', header=False)
 
 
 
@@ -225,8 +229,153 @@ def calc_autocorr(gpis):
         print('gpi %i finished (%i / %i).' % (gpi, cnt+1, len(np.atleast_1d(gpis))))
 
 
+def calc_pert_corr(gpis):
+
+    outpath = Path('/work/GLEAM/perturbation_correction')
+
+    if not outpath.exists():
+        outpath.mkdir(parents=True)
+
+    fname = outpath / ('part_%i.csv' % np.atleast_1d(gpis)[0])
+
+    params = {'nens': 1}
+    gleam_det = GLEAM(params)
+
+    nens = 100
+    params = {'nens': nens}
+    gleam = GLEAM(params)
+
+    fct = lambda xx, a, b: a * xx ** b
+
+    for cnt, gpi in enumerate(np.atleast_1d(gpis)):
+
+        det = gleam_det.proc_ol(gpi)['w1']
+        max_var = np.nanvar(det) * 1
+
+        pert = np.linspace(0, max_var, nens)
+        gleam.mod_pert = {'w1': ['normal', 'additive', pert]}
+        res = gleam.proc_ol(gpi)['w1']
+
+        ens_vars = np.array([(res[:, 0] - res[:, i]).var() for i in np.arange(res.shape[1])])
+
+        pl,pu = np.percentile(ens_vars, [5,95])
+        ind = np.where((ens_vars>pl)&(ens_vars<pu))
+
+        (a, b), cov = curve_fit(fct, pert, ens_vars)
+        (a2, b2), cov2 = curve_fit(fct, pert[ind], ens_vars[ind])
+
+        result = {'a': a, 'b' : b, 'c_a': cov[0,0], 'c_b': cov[1,1], 'c_ab': cov[0,1]}
+
+
+        print(a,b,cov)
+        print(a2,b2,cov2)
+
+        perts_corr = a * pert ** b
+        perts_corr2 = a2 * pert ** b2
+
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(10, 8))
+        plt.plot([0, max_var], [0, max_var], '--k', linewidth=3)
+        plt.xlim(0, max_var + max_var / 20.)
+        plt.ylim(0, np.nanmax(ens_vars)+ np.nanmax(ens_vars) / 20.)
+        plt.plot(pert, ens_vars, 'or', linewidth=2)
+        plt.plot(pert, perts_corr, '--b', linewidth=2)
+        plt.plot(pert, perts_corr2, '--g', linewidth=2)
+        plt.show()
+
+        # write_output(fname, result, gpi, precision=8)
+
+        print('gpi %i finished (%i / %i).' % (gpi, cnt + 1, len(np.atleast_1d(gpis))))
+
+def smooth_pert_corr():
+
+    res = pd.read_csv('/work/GLEAM/perturbation_correction/result.csv', index_col=0)
+
+    gpis_valid = get_valid_gpis(latmin=24., latmax=51., lonmin=-128., lonmax=-64.)
+    ind_valid = np.unravel_index(gpis_valid, (720, 1440))
+
+    imp = IterativeImputer(max_iter=10, random_state=0)
+    ind = np.unravel_index(res.index.values, (720, 1440))
+    for tag in ['a', 'b']:
+
+        img = np.full((720, 1440), np.nan)
+        img[ind] = res[tag]
+
+        # find all non-zero values
+        idx = np.where(~np.isnan(img))
+        vmin, vmax = np.percentile(img[idx], [2.5, 97.5])
+        img[img < vmin] = vmin
+        img[img > vmax] = vmax
+
+        # calculate fitting parameters
+        imp.set_params(min_value=vmin, max_value=vmax)
+        imp.fit(img)
+
+        # Define an anchor pixel to infer fitted image dimensions
+        tmp_img = img.copy()
+        tmp_img[idx[0][100], idx[1][100]] = 1000000
+
+        # transform image with and without anchor pixel
+        tmp_img_fitted = imp.transform(tmp_img)
+        img_fitted = imp.transform(img)
+
+        # # Get indices of fitted image
+        idx_anchor = np.where(tmp_img_fitted == 1000000)[1][0]
+        start = idx[1][100] - idx_anchor
+        end = start + img_fitted.shape[1]
+
+        # write output
+        img[:, start:end] = img_fitted
+        img = gaussian_filter(img, sigma=0.7, truncate=1)
+
+        res.loc[:, tag + '_s'] = img[ind_valid]
+
+    res.to_csv('/work/GLEAM/perturbation_correction/result_smoothed2.csv', float_format='%.3f')
+
+
+
+def test_pert_corr(gpis):
+
+    outpath = Path('/work/GLEAM/perturbation_correction_test')
+
+    if not outpath.exists():
+        outpath.mkdir(parents=True)
+
+    fname = outpath / ('part_%i.csv' % np.atleast_1d(gpis)[0])
+
+    pert = pd.read_csv('/work/GLEAM/errors/result_gapfilled_sig07.csv', index_col=0)['TC2_RMSE_GLEAM']**2
+    corr = pd.read_csv('/work/GLEAM/perturbation_correction/result.csv', index_col=0)
+    pert_corr = (pert / corr['a']) ** (1 / corr['b'])
+
+    params = {'nens': 25}
+    gleam = GLEAM(params)
+
+    for cnt, gpi in enumerate(np.atleast_1d(gpis)):
+
+        gleam.mod_pert = {'w1': ['normal', 'additive', pert_corr.loc[gpi]]}
+        res = gleam.proc_ol(gpi)['w1']
+
+        result = {'pert': pert.loc[gpi], 'pert_corr': pert_corr.loc[gpi], 'avg_ens_var': res.var(axis=1).mean()}
+
+        write_output(fname, result, gpi, precision=8)
+
+        print('gpi %i finished (%i / %i).' % (gpi, cnt + 1, len(np.atleast_1d(gpis))))
+
+
 if __name__=='__main__':
 
     # proc(calc_errors, procs=30)
     # merge_files('/work/GLEAM/errors')
-    fill_error_gaps()
+    # fill_error_gaps()
+
+    # proc(calc_pert_corr, procs=30)
+
+    # smooth_pert_corr()
+
+    # lat = 39.328437
+    # lon = -92.638084
+    #
+    # from pygleam_ag.grid import find_nearest_gpi
+    # gpi = find_nearest_gpi(lat,lon)
+    #
+    test_pert_corr(gpi)

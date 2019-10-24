@@ -8,6 +8,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
+from scipy.ndimage import gaussian_filter
+
 from pygleam_ag.grid import read_grid, get_valid_gpis
 
 def plot_image(data,tag,
@@ -179,6 +181,31 @@ def plot_error_stats(outpath, gapfilled=True):
     plt.savefig(outpath / ('TCA_RMSE' + sufix))
     plt.close()
 
+def plot_pert_corr(outpath):
+
+    fname = '/work/GLEAM/perturbation_correction/result.csv'
+    sufix = '.png'
+
+    res = pd.read_csv(fname, index_col=0)
+
+    res['c_a_rel'] = res['c_a'] / res['a']
+    res['c_b_rel'] = res['c_b'] / res['b']
+
+    plt.figure(figsize=(15, 9))
+
+    plt.subplot(2, 2, 1)
+    plot_image(res, 'a_s', cbrange=[0,3])
+    plt.subplot(2, 2, 2)
+    plot_image(res, 'b_s', cbrange=[0.7,1.3])
+    plt.subplot(2, 2, 3)
+    plot_image(res, 'c_a_rel', cbrange=[0, 2])
+    plt.subplot(2, 2, 4)
+    plot_image(res, 'c_b_rel', cbrange=[0, 0.025])
+
+    plt.tight_layout()
+    plt.savefig(outpath / ('pert_corr' + sufix))
+    plt.close()
+    # plt.show()
 
 def plot_gamma(outpath):
 
@@ -227,7 +254,8 @@ if __name__=='__main__':
         outpath.mkdir()
 
     # plot_gamma(outpath)
-    plot_error_stats(outpath, gapfilled=True)
+    # plot_error_stats(outpath, gapfilled=True)
+    plot_pert_corr(outpath)
     # plot_test()
 
 

@@ -92,8 +92,8 @@ def plot_ens_ts():
 
 if __name__=='__main__':
 
-    # plot_ens_ts()
-    plot_image()
+    plot_ens_ts()
+    # plot_image()
 
     #
     # ts = io.read_ts('obs_obs', lon, lat, species=spc).dropna()

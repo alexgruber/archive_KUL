@@ -71,8 +71,8 @@ def calc_ens_var(root, iteration):
     exp_ol = 'US_M36_SMOS40_TB_MadKF_OL_it%i' % iteration
     exp_da = 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration
 
-    # param = 'ObsFcstAnaEns'
-    param = 'ObsFcstAna'
+    param = 'ObsFcstAnaEns'
+    # param = 'ObsFcstAna'
 
     io_ol = LDAS_io(param, exp_ol)
     io_da = LDAS_io(param, exp_da)
@@ -91,21 +91,21 @@ def calc_ens_var(root, iteration):
         col, row = io_ol.grid.tileid2colrow(val.tile_id)
 
         for spc in [1, 2, 3, 4]:
-            # ts_fcst = io_ol.read_ts('obs_fcst', col, row, species=spc, lonlat=False).dropna()
-            # ts_obs = io_da.read_ts('obs_obs', col, row, species=spc, lonlat=False).dropna()
-            # ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
-            # if len(ts_ana) == 0:
-            #     continue
-            # ts_fcst = ts_fcst.loc[ts_ana.index]
-            # ts_obs = ts_obs.loc[ts_ana.index]
+            ts_fcst = io_ol.read_ts('obs_fcst', col, row, species=spc, lonlat=False).dropna()
+            ts_obs = io_da.read_ts('obs_obs', col, row, species=spc, lonlat=False).dropna()
+            ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
+            if len(ts_ana) == 0:
+                continue
+            ts_fcst = ts_fcst.loc[ts_ana.index]
+            ts_obs = ts_obs.loc[ts_ana.index]
 
-            # res.loc[idx,'obs_var_spc%i'%spc] = ts_obs.var(axis='columns').mean()
-            # res.loc[idx,'fcst_var_spc%i'%spc] = ts_fcst.var(axis='columns').mean()
-            # res.loc[idx,'ana_var_spc%i'%spc] = ts_ana.var(axis='columns').mean()
+            res.loc[idx,'obs_var_spc%i'%spc] = ts_obs.var(axis='columns').mean()
+            res.loc[idx,'fcst_var_spc%i'%spc] = ts_fcst.var(axis='columns').mean()
+            res.loc[idx,'ana_var_spc%i'%spc] = ts_ana.var(axis='columns').mean()
 
-            res.loc[idx,'obs_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
-            res.loc[idx,'fcst_var_spc%i'%spc] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
-            res.loc[idx,'ana_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
+            # res.loc[idx,'obs_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
+            # res.loc[idx,'fcst_var_spc%i'%spc] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
+            # res.loc[idx,'ana_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
 
     fname = root / 'result_files' / 'ens_var.csv'
 
@@ -126,12 +126,13 @@ def calc_ens_cov(root, iteration):
 
     res = pd.DataFrame(index=io_ol.grid.tilecoord.index.values, columns=['col', 'row'])
 
+    ids = io_ol.grid.tilecoord['tile_id'].values
+    res.loc[:, 'col'], res.loc[:, 'row'] = np.vectorize(io_ol.grid.tileid2colrow)(ids, local_cs=False)
+
     for spc in [1,2,3,4]:
 
         for cnt, (idx,val) in enumerate(io_ol.grid.tilecoord.iterrows()):
             print('spc %i: %i / %i' % (spc, cnt, len(res)))
-
-            res.loc[:, 'col'], res.loc[:, 'row'] = io_ol.grid.tileid2colrow(val.tile_id, local_cs=True)
 
             col, row = io_ol.grid.tileid2colrow(val.tile_id)
 
@@ -327,7 +328,7 @@ def plot_mse(root, iteration):
     fname = root / 'result_files' / 'mse.csv'
     res = pd.read_csv(fname, index_col=0)
 
-    for corrected in [True, ]:
+    for corrected in [False, True]:
 
         if corrected:
             fname = root / 'result_files' / 'ens_cov.csv'
@@ -637,11 +638,14 @@ def plot_perturbations(iteration):
     plot_ease_img2(imgD,'err_Tbh', cbrange=cbrange, title='V-pol (Dsc.)')
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+
+    plt.savefig(root / 'plots' / 'perturbations.png', dpi=plt.gcf().dpi)
+    plt.close()
 
 if __name__=='__main__':
 
-    iteration = 1
+    iteration = 4
 
     root = Path('/work/MadKF/CLSM/iter_%i'%iteration)
 
@@ -656,13 +660,13 @@ if __name__=='__main__':
     # calc_ens_var(root, iteration)
     # calc_ens_cov(root, iteration)
 
-    # plot_mse(root, iteration)
-    # plot_ens_cov(root, iteration)
-    # plot_ens_var(root)
+    plot_mse(root, iteration)
+    plot_ens_cov(root, iteration)
+    plot_ens_var(root)
 
-    # plot_P_R_check(iteration)
-    # plot_P_R_scl(iteration)
+    plot_P_R_check(iteration)
+    plot_P_R_scl(iteration)
 
-    # write_spatial_errors(root, iteration)
+    write_spatial_errors(root, iteration)
 
     plot_perturbations(iteration)
