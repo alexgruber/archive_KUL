@@ -235,8 +235,10 @@ def filter_diagnostics_evaluation(root, iteration):
     result_file = root / 'filter_diagnostics.nc'
 
     iter1 = LDAS_io('ObsFcstAna','US_M36_SMOS40_DA_cal_scaled')
-    iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 2))
-    iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 1))
+    iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 4)
+    iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 5)
+    # iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 2))
+    # iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 1))
     iter4 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration)
 
     runs = OrderedDict([(1,iter1.timeseries),
@@ -266,7 +268,7 @@ def filter_diagnostics_evaluation(root, iteration):
 
 if __name__ == '__main__':
 
-    iteration = 4
+    iteration = 51
 
     root = Path('/work/MadKF/CLSM/iter_%i/validation' % iteration)
 

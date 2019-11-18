@@ -6,11 +6,54 @@ import pandas as pd
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib import colors
 from mpl_toolkits.basemap import Basemap
 
 from scipy.ndimage import gaussian_filter
 
 from pygleam_ag.grid import read_grid, get_valid_gpis
+from pygleam_ag.GLEAM_model import GLEAM
+
+
+def plot_power_function_illustration():
+
+    x = np.linspace(0, 2, 1000)
+
+    plt.figure(figsize=(18, 12))
+
+    cc = [0.5, 1.0, 1.5]
+
+    for i, b in enumerate(cc):
+
+        plt.subplot(2, 3, i + 1)
+
+        for a in np.arange(0.6, 1.6, 0.2):
+            y = a * x ** b
+            c = (a - 0.2) / 1.8
+            plt.plot(x, y, color=[c, c, c], linewidth=2, label='a = %.1f' % a)
+        plt.plot((0, 2), (0, 2), '--k', linewidth=1)
+        plt.ylim((0, 2))
+        plt.title('a * x$^{%.1f}$ ' % b)
+        if i == 0:
+            plt.legend(loc='upper left')
+
+    for i, a in enumerate(cc):
+
+        plt.subplot(2, 3, 3 + i + 1)
+
+        for b in np.arange(0.6, 1.6, 0.2):
+            y = a * x ** b
+            c = (b - 0.2) / 1.8
+            plt.plot(x, y, color=[c, c, c], linewidth=2, label='b = %.1f' % b)
+        plt.plot((0, 2), (0, 2), '--k', linewidth=1)
+        plt.ylim((0, 2))
+        plt.title('%.1f * x$^b$ ' % a)
+        if i == 0:
+            plt.legend(loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+
 
 def plot_image(data,tag,
                 llcrnrlat=24,
@@ -20,6 +63,8 @@ def plot_image(data,tag,
                 cbrange=(-20,20),
                 cmap='jet',
                 title='',
+                normalize=False,
+                absolute=False,
                 fontsize=16):
 
     lats, lons, _ = read_grid()
@@ -27,7 +72,10 @@ def plot_image(data,tag,
     ind = np.unravel_index(data.index.values, lons.shape)
 
     img = np.full(lons.shape, np.nan)
-    img[ind] = data[tag]
+    if absolute:
+        img[ind] = np.abs(data[tag])
+    else:
+        img[ind] = data[tag]
     img_masked = np.ma.masked_invalid(img)
 
     m = Basemap(projection='mill',
@@ -40,7 +88,10 @@ def plot_image(data,tag,
     m.drawcountries()
     m.drawstates()
 
-    im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True)
+    if normalize:
+        im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True, norm=colors.LogNorm())
+    else:
+        im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True)
     im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
     cb = m.colorbar(im, "bottom", size="7%", pad="5%")
     for t in cb.ax.get_xticklabels():
@@ -48,7 +99,10 @@ def plot_image(data,tag,
     for t in cb.ax.get_yticklabels():
         t.set_fontsize(fontsize)
     if title == '':
-        title = tag.lower()
+        if absolute:
+            title = 'abs(' + tag.lower() + ')'
+        else:
+            title = tag.lower()
     plt.title(title,fontsize=fontsize)
 
 
@@ -188,23 +242,89 @@ def plot_pert_corr(outpath):
 
     res = pd.read_csv(fname, index_col=0)
 
-    res['c_a_rel'] = res['c_a'] / res['a']
-    res['c_b_rel'] = res['c_b'] / res['b']
+    i = 2
+
+    res['c_a_rel'] = res['c_a%i'%i] / res['a%i'%i]
+    res['c_b_rel'] = res['c_b%i'%i] / res['b%i'%i]
 
     plt.figure(figsize=(15, 9))
 
     plt.subplot(2, 2, 1)
-    plot_image(res, 'a_s', cbrange=[0,3])
+    plot_image(res, 'a%i_s'%i, cbrange=[0,3])
     plt.subplot(2, 2, 2)
-    plot_image(res, 'b_s', cbrange=[0.7,1.3])
+    plot_image(res, 'b%i_s'%i, cbrange=[0.7,1.3])
     plt.subplot(2, 2, 3)
     plot_image(res, 'c_a_rel', cbrange=[0, 2])
     plt.subplot(2, 2, 4)
     plot_image(res, 'c_b_rel', cbrange=[0, 0.025])
 
     plt.tight_layout()
-    plt.savefig(outpath / ('pert_corr' + sufix))
+    plt.savefig(outpath / ('pert_corr%i'%i + sufix))
     plt.close()
+    # plt.show()
+
+def plot_pert_corr_v2(outpath, smoothed=True):
+
+    mod = '_s' if smoothed is True else ''
+
+    fname = '/work/GLEAM/perturbation_correction_v2/result.csv'
+    sufix = '.png'
+
+    res = pd.read_csv(fname, index_col=0)
+
+    cb_a = [0.05,10]
+    cb_b = [0.3,1.3]
+    cb_c = [1e-6,1e-2]
+
+    plt.figure(figsize=(22, 9))
+
+    plt.subplot(2, 3, 1)
+    plot_image(res, 'a1' + mod, cbrange=cb_a, normalize=True)
+    plt.subplot(2, 3, 2)
+    plot_image(res, 'b1' + mod, cbrange=cb_b)
+    plt.subplot(2, 3, 3)
+    plot_image(res, 'c1' + mod, cbrange=cb_c, normalize=True, absolute=True)
+    plt.subplot(2, 3, 4)
+    plot_image(res, 'a2' + mod, cbrange=cb_a, normalize=True)
+    plt.subplot(2, 3, 5)
+    plot_image(res, 'b2' + mod, cbrange=cb_b)
+    plt.subplot(2, 3, 6)
+    plot_image(res, 'c2' + mod, cbrange=cb_c, normalize=True, absolute=True)
+
+    plt.tight_layout()
+    plt.savefig(outpath / ('pert_corr_v2' + mod + sufix))
+    plt.close()
+    # plt.show()
+
+def plot_pert_corr_test(outpath):
+
+    path = Path('/work/GLEAM/perturbation_correction_test_v5')
+    files = path.glob('*.csv')
+
+    sufix = '.png'
+
+    for i, fname in enumerate(np.sort(list(files))):
+
+        res = pd.read_csv(fname, index_col=0)
+
+        res['diff_rel'] = (res['avg_ens_var'] - res['pert']) / res['pert']
+
+        plt.figure(figsize=(15, 9))
+
+        cbrange = [0,0.005]
+
+        plt.subplot(2, 2, 1)
+        plot_image(res, 'pert', cbrange=cbrange)
+        plt.subplot(2, 2, 2)
+        plot_image(res, 'pert_corr', cbrange=cbrange)
+        plt.subplot(2, 2, 3)
+        plot_image(res, 'avg_ens_var', cbrange=cbrange)
+        plt.subplot(2, 2, 4)
+        plot_image(res, 'diff_rel', cbrange=[-0.4, 0.4])
+
+        plt.tight_layout()
+        plt.savefig(outpath / ('pert_corr_test_v%i' % (i+7) + sufix))
+        plt.close()
     # plt.show()
 
 def plot_gamma(outpath):
@@ -224,24 +344,43 @@ def plot_gamma(outpath):
     plt.close()
 
 
-def plot_test():
+def plot_ts(gpi):
 
-    gpis_valid = get_valid_gpis(latmin=24., latmax=51., lonmin=-128., lonmax=-64.)
-    ind_valid = np.unravel_index(gpis_valid, (720, 1440))
+    pert = pd.read_csv('/work/GLEAM/errors/result_gapfilled_sig07.csv', index_col=0)['TC2_RMSE_GLEAM'] ** 2 / 100**2
+    corr = pd.read_csv('/work/GLEAM/perturbation_correction/result.csv', index_col=0)
+    pert_corr = (pert / corr['a1_s']) ** (1 / corr['b1_s'])
 
-    img = np.load('/work/GLEAM/test.npy')
+    errvar = pert_corr.loc[gpi]
 
-    from scipy.ndimage import gaussian_filter
+    params = {'nens': 50}
+    gleam = GLEAM(params)
 
-    img_s = gaussian_filter(img, sigma=0.7, truncate=1)
-    # img_s = img
+    params = {'nens': 1}
+    gleam_det = GLEAM(params)
 
+    gleam.mod_pert = {'w1': ['normal', 'additive', errvar]}
 
-    res = pd.DataFrame({'test': img_s[ind_valid]}, index=gpis_valid)
+    var = 'w1'
+
+    res = gleam.proc_ol(gpi)[var]
+    res_det = gleam_det.proc_ol(gpi)[var]
+
+    # print(pert.loc[gpi], pert_corr.loc[gpi], res.var(axis=1).mean())
 
     plt.figure(figsize=(12, 7))
 
-    plot_image(res, 'test', cbrange=[0,1])
+    pd.DataFrame(res).plot(ax=plt.gca(),linewidth=0.5, linestyle= '--', legend=False)
+    pd.Series(res.mean(axis=1)).plot(ax=plt.gca(),linewidth=3)
+    pd.Series(res_det[:,0]).plot(ax=plt.gca(),linewidth=3)
+
+    r = np.corrcoef(res.mean(axis=1),res_det[:,0])[0,1]
+    b = res.mean(axis=1).mean() - res_det[:,0].mean()
+
+    print(r, b)
+
+    plt.title(var)
+
+    plt.ylim(0.05,0.45)
 
     plt.tight_layout()
     plt.show()
@@ -255,8 +394,23 @@ if __name__=='__main__':
 
     # plot_gamma(outpath)
     # plot_error_stats(outpath, gapfilled=True)
-    plot_pert_corr(outpath)
-    # plot_test()
+    # plot_pert_corr_v2(outpath)
+    plot_pert_corr_test(outpath)
+
+    # TODO  AT THIS GRID CELL, THE ERROR VARIANCE STARTS BLOWING UP, PROBABLY BECAUSE OF THE TREATMENT OF PROLONGED
+    # TODO: DRY PERIODS
+    # lat = 35.062078
+    # lon = -117.258583
+
+    # lat = 41.299531
+    # lon = -117.400013
+
+    # from pygleam_ag.grid import find_nearest_gpi
+    #
+    # gpi = find_nearest_gpi(lat, lon)
+    #
+    # plot_ts(gpi)
 
 
 
+    # plot_power_function_illustration()
