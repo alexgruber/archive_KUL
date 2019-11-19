@@ -17,7 +17,7 @@ def main():
     timeunit = 'hours since 2000-01-01 00:00'
     dates = date2num(pd.to_datetime([f.name[-19:-7] for f in files], format='%Y%m%d%H%M').to_pydatetime(), timeunit).astype('int32')
 
-    with Dataset(outfile, mode='w') as res:
+    with Dataset(outfile_img, mode='w') as res:
 
         for i,file in enumerate(sorted(files)):
             print('%i / %i' % (i+1, len(files)))
