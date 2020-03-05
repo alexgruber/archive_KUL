@@ -8,16 +8,16 @@ from netCDF4 import Dataset, date2num
 
 def main():
 
-    path = Path('/data_sets/LIS/NoahMP_belgium/exp1_OL/OUT_OL_Belgium/SURFACEMODEL')
-    outfile_img = path / 'images.nc'
-    outfile_ts = path / 'timeseries.nc'
+    path = Path('/staging/leuven/stg_00024/OUTPUT/saram/LIS/NoahMP_belgium/exp1_OL/OUT_OL_Belgium/SURFACEMODEL')
+    outfile_img = '/staging/leuven/stg_00024/OUTPUT/alexg/LIS/NoahMP_belgium/images.nc'
+    outfile_ts = '/staging/leuven/stg_00024/OUTPUT/alexg/LIS/NoahMP_belgium/timeseries.nc'
 
     files = sorted(path.glob('**/*.d01.nc'))
 
     timeunit = 'hours since 2000-01-01 00:00'
     dates = date2num(pd.to_datetime([f.name[-19:-7] for f in files], format='%Y%m%d%H%M').to_pydatetime(), timeunit).astype('int32')
 
-    with Dataset(outfile, mode='w') as res:
+    with Dataset(outfile_img, mode='w') as res:
 
         for i,file in enumerate(sorted(files)):
             print('%i / %i' % (i+1, len(files)))
