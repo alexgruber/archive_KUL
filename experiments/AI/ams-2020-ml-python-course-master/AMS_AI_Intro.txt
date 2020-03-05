@@ -1,0 +1,109 @@
+
+2020-01-11: AMS AI Introduction course
+
+Doc: https://sites.google.com/rams.colostate.edu/ams-ml4es/agenda-and-code?authuser=0
+
+Using "Google Colab" for code sharing
+
+1) Intro:
+
+https://mrrajeshrai.com/artificial-intelligence-vs-machine-learning-vs-deep-learning
+
+The ML pipeline
+Problem Definition: Loading and visualizing your data to see if ML methods are applicable
+How are the data distributed and how are different variables related
+Data Pre-processing: Transforming your data into forms more amenable for ML applications
+Data Separation: Splitting your data into training/validation/testing sets
+Model Training: Optimize one or more ML model on your processed data
+Deployment: Apply the ML model to testing data the model has not seen
+Evaluation: Determine how well the ML model performs
+Interpretation: Discover what the ML model has learned about the processed data
+
+Data vizualization:
+- package: seaborn: good for box/violin plots (use 'colorblind' palette)
+- package: cartopy: good for 2D plots -> no need to set up basemap, etc.
+  - add_feature: add shape files like coastlines
+  - set_extent: for regional clipping, even add a zoom factor
+
+handle Inf: convert to NaN with replace, then dropna() or fillna()
+
+!!! sklearn Scaler !!! -> integrated scaling functions (minmax, stddev, robust,...)
+https://scikit-learn.org/stable/auto_examples/preprocessing/plot_all_scaling.html#sphx-glr-auto-examples-preprocessing-plot-all-scaling-py
+
+!!! Dimensionlity reduction using PCA !!! -> see slides!
+Why perform dimensionality reduction?
+Less space is required to store data with reduced dimensions
+Running models is more computationally efficient on less dimensions
+Some models do not perform well on dimensionally large datasets
+Remove redundant features
+Better visualization in lower dimensional space
+https://towardsdatascience.com/a-one-stop-shop-for-principal-component-analysis-5582fb7e0a9c
+https://towardsdatascience.com/pca-using-python-scikit-learn-e653f8989e60
+
+
+2) Data Science Fundamentals:
+
+Training vs. Validation vs. Testing data set:
+val: hyper parameters (learning rate, number of iterations, numbers of layers)
+testing: independent validation of which model is the best --> cross-validation
+
+In general, regularization is a way to prevent overfitting by creating a simpler model.  𝐿1  and  𝐿2  regularization encourage the model to have smaller coefficients. This is useful when there are many predictors, because it is likely that some of these predictors have a weak causal relationship with the phenomenon.
+
+L1 norm: avoids too many small coefficients (unimportant ones)
+L2 norm: avoids single coefficients to grow too large
+
+Nice way to evaluate: "Validation reliability curve"
+
+Hyperparameter experiment -> "grid search" ... try all combination of prior defined hyperparameter ranges (e.g. lambda parameter values in lasso/ridge regression)
+!!! If overfitting is not an issue, L1 and L2 larger than zero might make your model worse!
+
+Normally, we split data into training, validation, and testing sets, as shown above. (This is called the holdout method.) But what if our small testing set is not representative of the data our model might see? i.e. What if we have a "bad split" and just don't know it?
+K-fold cross validation is a way to ensure that our model is performing well on different kinds of data by using different portions of the data in the testing set.
+Here's a summary of the method:
+Split the data into K parts.
+for i in range(0, K):
+    Take part i as the testing set.
+    Take the rest of the parts as the training set.
+    Train the model on the training set and evaluate it on the testing set.
+Collect all the evaluations scores from K different runs and combine them
+to summarize your final model.
+
+Visualization for contingency tables that are created with determinization thresholds:
+ROC courves, performance diagram, attributes diagram
+
+3) Supervised and unsupervised classification:
+
+logistic regression: regression turned into 0/1 using a sigmoid function, i.e. ln(y/1-y) = linreg
+best package: scikit-learn
+  fit(), predict(), score()
+  in the setup: define hyperparameters
+  penalty: can be l1, l2, elasticnet (l1+l2)
+
+A random forest is an ensemble of decision trees.
+In the first example with decision trees, you may have noticed a lot of overfitting.
+Decision trees can be unstable because small variations in the data might result in a completely different tree being generated.
+
+Grid Search: optimize hyper parameters, means e.g. finding optimal number of neurons / layers in an ANN
+
+4) Intro to deep learning:
+
+python package:
+tensorflow (for deep learning) --> good tutorials
+pytorch --> better applicability
+
+Machine learning: Supervised (i.e. feature extraction)
+Deep learning: unsupervised --> if you don't know what the features/predictures are
+
+ressources:
+Goodfellow book
+SC231N online course (stanford)
+distill.pub distilles high-quality research
+
+cost functions and gradient descent -> learning rate schedule: changing descent paramter with progress... encoded in many packages!! can be chosen out of the box... "Adam" is a good algorithm to start with
+
+Prevent under / overfitting: Plot training error vs. validation error (former will keep going down, latter will have a turning point)
+
+segmentation = classification on an per-pixel level
+
+temporal phenomena: long-term-short-term memory (LSTM) with a sequence of CNNs?
+paper: deep learning for multi-year ENSO forecasts (nature)

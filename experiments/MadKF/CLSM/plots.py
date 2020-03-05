@@ -9,6 +9,9 @@ from netCDF4 import Dataset
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
+from pyldas.interface import LDAS_io
+from pyldas.templates import template_error_Tb40
+
 def plot_image(img, lats, lons,
                 llcrnrlat=24,
                 urcrnrlat=51,
@@ -115,6 +118,7 @@ def plot_filter_diagnostics(root, iteration):
             fout = root / 'plots' / (var + '.png')
             f.savefig(fout, dpi=300, bbox_inches='tight')
             plt.close()
+
             # plt.tight_layout()
             # plt.show()
 
@@ -337,14 +341,188 @@ def plot_ismn_statistics_v2():
             # plt.show()
 
 
+def plot_ismn_statistics_v3(root):
+
+    res = pd.read_csv(root / 'insitu_TCA.csv')
+    res.index = res.network
+    res2 = pd.read_csv(root / 'insitu.csv')
+    res2.index = res2.network
+
+    variables = ['sm_surface', 'sm_rootzone']
+    var_labels = ['surface', 'root-zone']
+
+    runs = ['noDA', 'DA_const_err','DA_madkf']
+    run_labels = ['Open Loop', 'EnKF (const. err.)','MadKF']
+    offsets = [-0.2, 0.0, 0.2]
+    cols = ['lightblue', 'lightgreen', 'coral']
+    fontsize = 16
+
+    networks  = ['SCAN', 'USCRN']
+    title = ', '.join(networks)
+    res = res.loc[networks,:]
+    res2 = res2.loc[networks,:]
+
+    f = plt.figure(figsize=(14,8))
+
+    titles = ['ubRMSD', 'ubRMSE', 'Pearson R$^2$ ', 'TCA R$^2$']
+
+    ylims = [[0.0, 0.08],
+             [0.0, 0.08],
+             [0.0, 1.0],
+             [0.0, 1.0]]
+
+    valss = [[[res2['ubrmsd_' + run + '_absolute_' + var].values for run in runs] for var in variables],
+             [[res['ubRMSE_model_' + run + '_absolute_' + var].values for run in runs] for var in variables],
+             [[res2['corr_' + run + '_absolute_' + var].values ** 2 for run in runs] for var in variables],
+             [[res['R2_model_' + run + '_absolute_' + var].values for run in runs] for var in variables]]
+
+    for n, (vals, tit, ylim) in enumerate(zip(valss, titles, ylims)):
+
+        ax = plt.subplot(2,2,n+1)
+
+        plt.grid(color='k', linestyle='--', linewidth=0.25)
+
+        data = list()
+        ticks = list()
+        pos = list()
+        colors = list()
+
+        for i, (val, var_label) in enumerate(zip(vals,var_labels)):
+
+            ticks.append(var_label)
+            for col,offs, v in zip(cols,offsets,val):
+                tmp_data = v
+                tmp_data = tmp_data[~np.isnan(tmp_data)]
+                data.append(tmp_data)
+                pos.append(i+1 + offs)
+                colors.append(col)
+
+        box = ax.boxplot(data, whis=[5,95], showfliers=False, positions=pos, widths=0.1, patch_artist=True)
+        for patch, color in zip(box['boxes'], colors):
+            patch.set(color='black', linewidth=2)
+            patch.set_facecolor(color)
+        for patch in box['medians']:
+            patch.set(color='black', linewidth=2)
+        for patch in box['whiskers']:
+            patch.set(color='black', linewidth=1)
+        plt.xticks(np.arange(len(var_labels))+1, ticks,fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xlim(0.5,len(ticks)+0.5)
+        plt.ylim(ylim)
+        for k in np.arange(len(var_labels)):
+            plt.axvline(k+0.5, linewidth=1, color='k')
+        if n == 1:
+            plt.figlegend((box['boxes'][0:4]),run_labels,'upper right',fontsize=fontsize-4)
+        ax.set_title(tit ,fontsize=fontsize)
+
+    plt.tight_layout()
+
+    fout = root / 'plots' / 'ismn_stats.png'
+    f.savefig(fout, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # plt.show()
+
+
+def plot_improvement_vs_uncertainty_update(iteration):
+
+    io = LDAS_io()
+
+    root = Path('/work/MadKF/CLSM/iter_%i' % iteration)
+
+    res = pd.read_csv(root / 'validation' / 'insitu_TCA.csv')
+    res.index = res.network
+    tilenum = np.vectorize(io.grid.colrow2tilenum)(res.ease_col.values,res.ease_row.values)
+
+    root = Path('/work/MadKF/CLSM/iter_%i' % 531)
+    fA = root / 'absolute' / 'error_files' / 'gapfilled' / 'SMOS_fit_Tb_A.bin'
+    fD = root / 'absolute' / 'error_files' / 'gapfilled' / 'SMOS_fit_Tb_D.bin'
+
+    dtype, hdr, length = template_error_Tb40()
+    imgA = io.read_fortran_binary(fA, dtype, hdr=hdr, length=length)
+    imgD = io.read_fortran_binary(fD, dtype, hdr=hdr, length=length)
+    imgA.index += 1
+    imgD.index += 1
+
+    pol = 'h'
+    orb = 'dsc'
+
+    # if (orb == 'asc') & (pol == 'h'):
+    #     perts = imgA.loc[tilenum,'err_Tbh'].values
+    # elif (orb == 'asc') & (pol == 'v'):
+    #     perts = imgA.loc[tilenum,'err_Tbv'].values
+    # elif (orb == 'dsc') & (pol == 'h'):
+    #     perts = imgD.loc[tilenum,'err_Tbh'].values
+    # elif (orb == 'dsc') & (pol == 'v'):
+    #     perts = imgD.loc[tilenum,'err_Tbv'].values
+
+    perts = (imgA.loc[tilenum, 'err_Tbh'].values +
+            imgA.loc[tilenum,'err_Tbv'].values +
+            imgD.loc[tilenum,'err_Tbh'].values +
+            imgD.loc[tilenum, 'err_Tbv'].values) / 4
+
+    fontsize=14
+
+    f = plt.figure(figsize=(20,12))
+
+    for i,var in enumerate(['sm_surface', 'sm_rootzone']):
+        for j,mode in enumerate(['absolute','shortterm','longterm']):
+
+            tag1 = 'R2_model_DA_madkf_' + mode + '_' + var
+            tag2 = 'R2_model_DA_const_err_' + mode + '_' + var
+            dR2 = (res[tag1] - res[tag2]).values
+
+            ind = np.where(~np.isnan(dR2))
+            fit = np.polyfit(perts[ind],dR2[ind],1)
+
+
+            ax = plt.subplot(2,3,j+1 + i*3)
+            plt.axhline(color='black', linestyle='--', linewidth=1)
+            plt.plot(perts, dR2, 'o', color='orange', markeredgecolor='black', markeredgewidth=0.5, markersize=6)
+            plt.plot(np.arange(12), fit[0] * np.arange(12) + fit[1], '--', color='black', linewidth=3)
+
+            plt.xlim(0,11)
+            plt.ylim(-1,1)
+
+            if i==0:
+                plt.title(mode, fontsize=fontsize)
+                ax.tick_params(labelbottom=False)
+                # labels = [item.get_text() for item in ax.get_xticklabels()]
+                # empty_string_labels = [''] * len(labels)
+                # ax.set_xticklabels(empty_string_labels)
+            else:
+                plt.xticks(fontsize=fontsize-2)
+
+
+            if j==0:
+                plt.ylabel(var, fontsize=fontsize)
+                plt.yticks(fontsize=fontsize-2)
+            else:
+                ax.tick_params(labelleft=False)
+                # labels = [item.get_text() for item in ax.get_yticklabels()]
+                # empty_string_labels = [''] * len(labels)
+                # ax.set_xticklabels(empty_string_labels)
+
+    fout = root / 'validation' / 'plots' / 'gain_vs_err.png'
+    f.savefig(fout, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # plt.tight_layout()
+    # plt.show()
+
+
 if __name__=='__main__':
 
-    iteration = 52
+    iteration = 5
     root = Path('/work/MadKF/CLSM/iter_%i/validation' % iteration)
 
     if not (root / 'plots').exists():
         Path.mkdir((root / 'plots'), parents=True)
 
     # plot_ismn_statistics(root)
-    plot_ismn_statistics_v2()
+    # plot_ismn_statistics_v2()
+    plot_ismn_statistics_v3(root)
     # plot_filter_diagnostics(root, iteration)
+
+    # plot_improvement_vs_uncertainty_update(iteration)
+

@@ -16,6 +16,8 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from scipy.ndimage import gaussian_filter
 
+from myprojects.timeseries import calc_anomaly
+
 def tca(df):
     cov = df.dropna().cov().values
     ind = (0, 1, 2, 0, 1, 2)
@@ -24,7 +26,7 @@ def tca(df):
     return err_var
 
 
-def calc_tb_mse(root, iteration):
+def calc_tb_mse(root, iteration, anomaly=True):
 
     # exp_ol = 'US_M36_SMOS40_TB_ens_test_OL'
     # exp_da = 'US_M36_SMOS40_TB_MadKF_it%i' % iteration
@@ -56,9 +58,19 @@ def calc_tb_mse(root, iteration):
             if len(ts_ana) == 0:
                 continue
             ts_fcst = ts_fcst.loc[ts_ana.index]
-            ts_obs = ts_obs.loc[ts_ana.index]
 
-            tc_res = tca(pd.concat((ts_obs,ts_fcst,ts_ana),axis=1))
+            if anomaly is True:
+                # ts_fcst = calc_anomaly(ts_fcst, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
+                # ts_obs = calc_anomaly(ts_obs, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
+                # ts_ana = calc_anomaly(ts_ana, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
+
+                ts_fcst = calc_anomaly(ts_fcst, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
+                ts_obs = calc_anomaly(ts_obs, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
+                ts_ana = calc_anomaly(ts_ana, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
+
+            df = pd.concat((ts_obs,ts_fcst,ts_ana),axis=1).dropna()
+            # print(len(df))
+            tc_res = tca(df)
 
             res.loc[idx,'mse_obs_spc%i'%spc] = tc_res[0]
             res.loc[idx,'mse_fcst_spc%i'%spc] = tc_res[1]
@@ -107,7 +119,6 @@ def calc_ens_var(root, iteration):
             res.loc[idx,'fcst_var_spc%i'%spc] = ts_fcst.var(axis='columns').mean()
             res.loc[idx,'ana_var_spc%i'%spc] = ts_ana.var(axis='columns').mean()
 
-
             # res.loc[idx,'obs_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
             # res.loc[idx,'fcst_var_spc%i'%spc] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
             # res.loc[idx,'ana_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
@@ -131,7 +142,7 @@ def smooth_parameters(root):
         res = pd.read_csv(infile,index_col=0)
         tags = res.columns.drop(['col','row']).values
 
-        res = fill_gaps(res, tags)
+        res = fill_gaps(res, tags, smooth=True)
 
         res.to_csv(outfile, float_format='%.6f')
 
@@ -262,7 +273,7 @@ def plot_ease_img(data,tag,
     ind_lon = data['col'].values.astype('int')
     img = np.full(lons.shape, np.nan)
 
-    img[ind_lat,ind_lon] = data[tag] if sqrt is False else np.sqrt(data[tag])
+    img[ind_lat,ind_lon] = np.abs(data[tag]) if sqrt is False else np.sqrt(np.abs(data[tag]))
     img_masked = np.ma.masked_invalid(img)
 
     m = Basemap(projection='mill',
@@ -284,28 +295,30 @@ def plot_ease_img(data,tag,
         # cb.ax.set_xticklabels(['ASC','no sig. diff', 'AMS'])
         cb = m.colorbar(im, "bottom", size="7%", pad=0.05)
         for t in cb.ax.get_xticklabels():
-            t.set_fontsize(fontsize)
+            t.set_fontsize(fontsize-2)
         for t in cb.ax.get_yticklabels():
-            t.set_fontsize(fontsize)
+            t.set_fontsize(fontsize-2)
 
     if title != '':
         plt.title(title,fontsize=fontsize)
 
     x, y = m(-79, 25)
-    plt.text(x, y, 'mean = %.3f' % np.ma.mean(img_masked), fontsize=fontsize - 2)
+    plt.text(x, y, 'mean = %.2f' % np.ma.mean(img_masked), fontsize=fontsize - 4)
 
-def plot_ens_cov(root, iteration, smoothed=True):
+def plot_ens_cov(root, last_it, smoothed=False):
+
+    fontsize = 16
 
     sub = 'smoothed' if smoothed else ''
 
     fname = root / 'result_files' / sub / 'ens_cov.csv'
     res = pd.read_csv(fname, index_col=0).dropna()
 
-    # for corrected in [False]:
+    # for corrected in [True]:
     for corrected in [False, True]:
 
         if corrected:
-            fname = Path('/work/MadKF/CLSM/iter_%i'%(iteration-1)) / 'result_files' / sub / 'mse.csv'
+            fname = Path('/work/MadKF/CLSM/iter_%i' % last_it) / 'result_files' / sub / 'mse.csv'
             res0 = pd.read_csv(fname, index_col=0).dropna()
 
             fname = root / 'result_files' / sub / 'ens_var.csv'
@@ -315,14 +328,23 @@ def plot_ens_cov(root, iteration, smoothed=True):
         else:
             fname_out = root / 'plots' / sub / 'ens_cov_uncorrected.png'
 
-        plt.figure(figsize=(24,11))
+        plt.figure(figsize=(25,11))
 
         cmap='jet'
 
         cbrange1 = [-1, 1]
-        cbrange2 = [0, 10]
+        cbrange2 = [0, 16]
 
         for spc in [1,2,3,4]:
+
+            if spc == 1:
+                spc_tit = 'H pol. / Asc.'
+            elif spc == 2:
+                spc_tit = 'H pol. / Dsc.'
+            elif spc == 3:
+                spc_tit = 'V pol. / Asc.'
+            else:
+                spc_tit = 'V pol. / Dsc.'
 
             if corrected:
                 scl_obs =  res0['mse_obs_spc%i' % spc] / res1['obs_var_spc%i' % spc]
@@ -334,28 +356,36 @@ def plot_ens_cov(root, iteration, smoothed=True):
                 res['c_obs_ana_spc%i' % spc] *= np.sqrt(scl_obs*scl_ana)
 
             plt.subplot(3,4,spc)
-            plot_ease_img(res, 'c_ol_obs_spc%i'%spc, cbrange=cbrange1, title='c_ol_obs_spc%i'%spc, cmap=cmap)
+            plot_ease_img(res, 'c_ol_obs_spc%i'%spc, cbrange=cbrange1, title=spc_tit, fontsize=fontsize, cmap=cmap)
+            if spc == 1:
+                plt.ylabel('OL - Obs.', fontsize=fontsize)
 
             plt.subplot(3,4,spc+4)
-            plot_ease_img(res, 'c_ol_ana_spc%i'%spc, cbrange=cbrange1, title='c_ol_ana_spc%i'%spc, cmap=cmap)
+            plot_ease_img(res, 'c_ol_ana_spc%i'%spc, cbrange=cbrange1, title='', fontsize=fontsize, cmap=cmap)
+            if spc == 1:
+                plt.ylabel('OL - Ana.', fontsize=fontsize)
 
             plt.subplot(3,4,spc+8)
-            plot_ease_img(res, 'c_obs_ana_spc%i'%spc, cbrange=cbrange2, title='c_obs_ana_spc%i'%spc, cmap=cmap)
+            plot_ease_img(res, 'c_obs_ana_spc%i'%spc, cbrange=cbrange2, title='', fontsize=fontsize, cmap=cmap)
+            if spc == 1:
+                plt.ylabel('Obs. - Ana.', fontsize=fontsize)
 
-        plt.tight_layout()
+        # plt.tight_layout()
         # plt.show()
-        plt.savefig(fname_out, dpi=plt.gcf().dpi)
+
+        plt.savefig(fname_out, dpi=plt.gcf().dpi, bbox_inches='tight')
         plt.close()
 
 
-def correct_mse(iteration, smoothed=False):
+def correct_mse(curr_it, last_it, smoothed=False):
 
     sub = 'smoothed' if smoothed else ''
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % (iteration - 1)) / 'result_files' / sub
-    res0 = pd.read_csv(root  / 'mse_corrected.csv', index_col=0) #TODO: THIS SHOULD BE MSE_CORRECTED!!!
+    root = Path('/work/MadKF/CLSM/iter_%i' % last_it) / 'result_files' / sub
+    res0 = pd.read_csv(root  / 'mse_corrected.csv', index_col=0)
+    # res0 = pd.read_csv(root  / 'mse.csv', index_col=0) #TODO: THIS SHOULD BE MSE_CORRECTED!!!
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % iteration) / 'result_files' / sub
+    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it) / 'result_files' / sub
     res = pd.read_csv(root / 'mse.csv', index_col=0)
     res1 = pd.read_csv(root / 'ens_var.csv', index_col=0)
     cov = pd.read_csv(root / 'ens_cov.csv', index_col=0)
@@ -371,15 +401,17 @@ def correct_mse(iteration, smoothed=False):
         cov['c_ol_ana_spc%i' % spc] *= np.sqrt(scl_fcst * scl_ana)
         cov['c_obs_ana_spc%i' % spc] *= np.sqrt(scl_obs * scl_ana)
 
-        res['mse_obs_spc%i' % spc] = res['mse_obs_spc%i' % spc] - cov['c_ol_ana_spc%i' % spc] + cov[
-            'c_obs_ana_spc%i' % spc]
-        res['mse_fcst_spc%i' % spc] = res['mse_fcst_spc%i' % spc] + cov['c_ol_ana_spc%i' % spc] - cov[
-            'c_obs_ana_spc%i' % spc]
+        res['mse_obs_spc%i' % spc] = np.abs(res['mse_obs_spc%i' % spc] - cov['c_ol_ana_spc%i' % spc] + cov[
+            'c_obs_ana_spc%i' % spc])
+        res['mse_fcst_spc%i' % spc] = np.abs(res['mse_fcst_spc%i' % spc] + cov['c_ol_ana_spc%i' % spc] - cov[
+            'c_obs_ana_spc%i' % spc])
 
     res.to_csv(fname_out)
 
 
-def plot_mse(root, smoothed=True):
+def plot_mse(root, smoothed=False):
+
+    fontsize = 16
 
     sub = 'smoothed' if smoothed else ''
 
@@ -395,28 +427,46 @@ def plot_mse(root, smoothed=True):
 
         res = pd.read_csv(fname_in, index_col=0)
 
-        plt.figure(figsize=(24,11))
+        plt.figure(figsize=(25,11))
 
         cmap='jet'
 
-        cbrange = [0, 100]
+        cbrange = [0, 12]
 
         for spc in [1, 2, 3, 4]:
+
+            if spc == 1:
+                spc_tit = 'H pol. / Asc.'
+            elif spc == 2:
+                spc_tit = 'H pol. / Dsc.'
+            elif spc == 3:
+                spc_tit = 'V pol. / Asc.'
+            else:
+                spc_tit = 'V pol. / Dsc.'
+
             plt.subplot(3,4,spc)
-            plot_ease_img(res, 'mse_obs_spc%i'%spc, cbrange=cbrange, title='ubMSE obs (spc%i)'%spc, cmap=cmap)
+            plot_ease_img(res, 'mse_obs_spc%i'%spc, cbrange=cbrange, title=spc_tit, cmap=cmap, sqrt=True, fontsize=fontsize)
+            if spc == 1:
+                plt.ylabel('ubRMSE Observation', fontsize=fontsize)
+
             plt.subplot(3,4,spc+4)
-            plot_ease_img(res, 'mse_fcst_spc%i'%spc, cbrange=cbrange, title='ubMSE fcst (spc%i)'%spc, cmap=cmap)
+            plot_ease_img(res, 'mse_fcst_spc%i'%spc, cbrange=cbrange, title='', cmap=cmap, sqrt=True, fontsize=fontsize)
+            if spc == 1:
+                plt.ylabel('ubRMSE Open Loop', fontsize=fontsize)
+
             plt.subplot(3,4,spc+8)
-            plot_ease_img(res, 'mse_ana_spc%i'%spc, cbrange=cbrange, title='ubMSE ana (spc%i)'%spc, cmap=cmap)
+            plot_ease_img(res, 'mse_ana_spc%i'%spc, cbrange=cbrange, title='', cmap=cmap, sqrt=True, fontsize=fontsize)
+            if spc == 1:
+                plt.ylabel('ubRMSE Analysis', fontsize=fontsize)
 
-        plt.tight_layout()
-
+        # plt.tight_layout()
         # plt.show()
-        plt.savefig(fname_out, dpi=plt.gcf().dpi)
+
+        plt.savefig(fname_out, dpi=plt.gcf().dpi, bbox_inches='tight')
         plt.close()
 
 
-def plot_ens_var(root, smoothed=True):
+def plot_ens_var(root, smoothed=False):
 
     sub = 'smoothed' if smoothed else ''
 
@@ -457,14 +507,14 @@ def plot_ens_var(root, smoothed=True):
     plt.subplot(3,4,12)
     plot_ease_img(res, 'ana_var_spc4', cbrange=cbrange, title='Ana. Ens. Var. Spc4', cmap=cmap)
 
-    plt.tight_layout()
-
+    # plt.tight_layout()
     # plt.show()
-    plt.savefig(root / 'plots' / sub / 'ens_var.png', dpi=plt.gcf().dpi)
+
+    plt.savefig(root / 'plots' / sub / 'ens_var.png', dpi=plt.gcf().dpi, bbox_inches='tight')
     plt.close()
 
 
-def plot_obs_pert(root, smoothed=True):
+def plot_obs_pert(root, smoothed=False):
 
     sub = 'smoothed' if smoothed else ''
 
@@ -482,7 +532,7 @@ def plot_obs_pert(root, smoothed=True):
         res.loc[(res['obs_var_spc%i' % spc] < 1), 'obs_var_spc%i' % spc] = 1
         res.loc[(res['obs_var_spc%i' % spc] > 100), 'obs_var_spc%i' % spc] = 100
 
-        res.loc[:, 'obs_var_spc%i' % spc] **= (0.5)
+        res.loc[:, 'obs_var_spc%i' % spc] **= 0.5
 
         # res.loc[np.isnan(res['obs_var_spc%i'%spc]),'obs_var_spc%i'%spc] = res['obs_var_spc%i'%spc].median()
 
@@ -503,14 +553,14 @@ def plot_obs_pert(root, smoothed=True):
     plt.subplot(224)
     plot_ease_img(res, 'obs_var_spc4', cbrange=cbrange, title='Species 4', cmap=cmap)
 
-    plt.tight_layout()
-
+    # plt.tight_layout()
     # plt.show()
-    plt.savefig(root / 'plots' / sub / 'obs_pert.png', dpi=plt.gcf().dpi)
+
+    plt.savefig(root / 'plots' / sub / 'obs_pert.png', dpi=plt.gcf().dpi, bbox_inches='tight')
     plt.close()
 
 
-def fill_gaps(xres, tags):
+def fill_gaps(xres, tags, smooth=False):
 
     res = xres.copy()
 
@@ -550,17 +600,19 @@ def fill_gaps(xres, tags):
 
         # write output
         img[:,start:end] = img_fitted
-        img = gaussian_filter(img, sigma=0.6, truncate=1)
+
+        if smooth:
+            img = gaussian_filter(img, sigma=0.6, truncate=1)
 
         res.loc[:, tag] = img[ind_lat, ind_lon]
         res.loc[:, tag] = res.loc[:, tag].replace(np.nan, res.loc[:, tag].median())
 
     return res
 
-def write_spatial_errors(root, iteration, smoothed=True):
+def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
 
     # TODO: ALTERNATIVE OPTION: USE ALREADY SMOOTHED INPUT
-    # sub = 'smoothed' if smoothed else ''
+    # sub = 'gapfilled' if gapfilled else ''
     sub = ''
 
     froot = root / 'error_files' / sub
@@ -573,7 +625,8 @@ def write_spatial_errors(root, iteration, smoothed=True):
     fname = root / 'result_files'/ sub / 'ens_var.csv'
     ensvar = pd.read_csv(fname, index_col=0)
 
-    fname = root / 'result_files'/ sub / 'mse_corrected.csv'
+    # fname = root / 'result_files'/ sub / 'mse_corrected.csv'
+    fname = root / 'result_files'/ sub / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
     mse = pd.read_csv(fname, index_col=0)
 
     obs_err = ensvar[['col','row']]
@@ -583,13 +636,13 @@ def write_spatial_errors(root, iteration, smoothed=True):
     for spc in np.arange(1,5):
         obs_err.loc[:,'obs_var_spc%i'%spc] = ensvar['fcst_var_spc%i'%spc] * mse['mse_obs_spc%i'%spc] / mse['mse_fcst_spc%i'%spc]
         obs_err.loc[(obs_err['obs_var_spc%i' % spc] < 1), 'obs_var_spc%i' % spc] = 1
-        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 100), 'obs_var_spc%i' % spc] = 100
+        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 500), 'obs_var_spc%i' % spc] = 500
         # obs_err.loc[np.isnan(obs_err['obs_var_spc%i'%spc]),'obs_var_spc%i'%spc] = obs_err['obs_var_spc%i'%spc].median()
-        obs_err.loc[:, 'obs_var_spc%i' % spc] **= (0.5)
+        obs_err.loc[:, 'obs_var_spc%i' % spc] **= 0.5
 
         # TODO: ALTERNATIVE APPROACH: SMOOTH PERTURBATIONS DIRECTLY (v51)
-        if smoothed:
-            obs_err.loc[:, 'obs_var_spc%i' % spc] = fill_gaps(obs_err, 'obs_var_spc%i' % spc)['obs_var_spc%i' % spc]
+        if gapfilled:
+            obs_err.loc[:, 'obs_var_spc%i' % spc] = fill_gaps(obs_err, 'obs_var_spc%i' % spc, smooth=smooth)['obs_var_spc%i' % spc]
 
         # plt.subplot(2,2,spc)
         # plot_ease_img(obs_err, 'obs_var_spc%i'%spc, cbrange=[0,10], title='Species %i'%spc, cmap='jet')
@@ -638,13 +691,13 @@ def write_spatial_errors(root, iteration, smoothed=True):
             io.write_fortran_block(fid, res[f].values)
         fid.close()
 
-def plot_P_R_check(iteration):
+def plot_P_R_check(curr_it, last_it):
 
-    root = Path('/work/MadKF/CLSM/iter_%i'%(iteration-1))
+    root = Path('/work/MadKF/CLSM/iter_%i' % last_it)
     fname = root / 'result_files' / 'mse.csv'
     res0 = pd.read_csv(fname, index_col=0).dropna()
 
-    root = Path('/work/MadKF/CLSM/iter_%i'%iteration)
+    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
     fname = root / 'result_files' / 'ens_var.csv'
     res1 = pd.read_csv(fname, index_col=0).dropna()
 
@@ -671,13 +724,13 @@ def plot_P_R_check(iteration):
     plt.close()
 
 
-def plot_P_R_scl(iteration):
+def plot_P_R_scl(curr_it, last_it):
 
-    root = Path('/work/MadKF/CLSM/iter_%i'%(iteration-1))
+    root = Path('/work/MadKF/CLSM/iter_%i' % last_it)
     fname = root / 'result_files' / 'mse.csv'
     res0 = pd.read_csv(fname, index_col=0).dropna()
 
-    root = Path('/work/MadKF/CLSM/iter_%i'%iteration)
+    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
     fname = root / 'result_files' / 'ens_var.csv'
     res1 = pd.read_csv(fname, index_col=0).dropna()
 
@@ -710,9 +763,10 @@ def plot_P_R_scl(iteration):
 
 
 
-def plot_perturbations(iteration, smoothed=False):
+def plot_perturbations(iteration, smoothed=False, gapfilled=True):
 
-    sub = 'smoothed' if smoothed else ''
+    # sub = 'smoothed' if smoothed else 'gapfilled' if gapfilled else 'raw'
+    sub = ''
 
     root = Path('/work/MadKF/CLSM/iter_%i'% iteration)
 
@@ -729,7 +783,7 @@ def plot_perturbations(iteration, smoothed=False):
     imgA.index += 1
     imgD.index += 1
 
-    cbrange = [0,10]
+    cbrange = [0,20]
 
     plt.figure(figsize=(20, 10))
 
@@ -745,39 +799,40 @@ def plot_perturbations(iteration, smoothed=False):
     plt.tight_layout()
     # plt.show()
 
-    plt.savefig(root / 'plots' / sub / 'perturbations.png', dpi=plt.gcf().dpi)
+    plt.savefig(root / 'plots' / 'perturbations.png', dpi=plt.gcf().dpi)
     plt.close()
 
 if __name__=='__main__':
 
-    iteration = 4
+    curr_it = 531
+    last_it = 4
 
-    root = Path('/work/MadKF/CLSM/iter_%i'%iteration)
+    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
 
-    if not (root / 'result_files').exists():
-        Path.mkdir(root / 'result_files', parents=True)
-    if not (root / 'plots' / 'smoothed').exists():
-        Path.mkdir(root / 'plots'/ 'smoothed', parents=True)
-    if not (root / 'error_files' / 'smoothed').exists():
-        Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
+    # if not (root / 'result_files').exists():
+    #     Path.mkdir(root / 'result_files', parents=True)
+    # if not (root / 'plots' / 'smoothed').exists():
+    #     Path.mkdir(root / 'plots'/ 'smoothed', parents=True)
+    # if not (root / 'error_files' / 'smoothed').exists():
+    #     Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
 
-    # calc_tb_mse(root, iteration)
-    # calc_ens_var(root, iteration)
-    # calc_ens_cov(root, iteration)
+    calc_tb_mse(root, curr_it)
+    # calc_ens_var(root, curr_it)
+    # calc_ens_cov(root, curr_it)
     # smooth_parameters(root)
 
-    correct_mse(iteration)
-
+    # correct_mse(curr_it, last_it)
     # plot_mse(root)
+
     # plot_ens_var(root)
-    # plot_ens_cov(root, iteration)
+    # plot_ens_cov(root, last_it)
     # plot_obs_pert(root)
 
 
-    # plot_P_R_check(iteration)
-    # plot_P_R_scl(iteration)
+    # plot_P_R_check(curr_it, last_it)
+    # plot_P_R_scl(curr_it, last_it)
 
-    write_spatial_errors(root, iteration)
-    plot_perturbations(iteration)
+    write_spatial_errors(root, curr_it)
+    plot_perturbations(curr_it)
 
 

@@ -99,7 +99,7 @@ def insitu_evaluation(root, iteration):
                     res['ubrmsd_' + run +'_' + mode + '_' + var] = np.sqrt((((tmp[1]-tmp[1].mean())-(tmp[2]-tmp[2].mean()))**2).mean())
 
 
-        if (os.path.isfile(result_file) == False):
+        if not os.path.isfile(result_file):
             res.to_csv(result_file, float_format='%0.4f')
         else:
             res.to_csv(result_file, float_format='%0.4f', mode='a', header=False)
@@ -199,7 +199,7 @@ def TCA_insitu_evaluation(root, iteration):
 
                         res['len_' + mode + '_' + var] = len(data)
 
-            if (os.path.isfile(result_file) == False):
+            if not os.path.isfile(result_file):
                 res.to_csv(result_file, float_format='%0.4f')
             else:
                 res.to_csv(result_file, float_format='%0.4f', mode='a', header=False)
@@ -266,18 +266,23 @@ def filter_diagnostics_evaluation(root, iteration):
                                                          np.sqrt(runs[run]['obs_obsvar'].isel(species=i_spc) + runs[run]['obs_fcstvar'].isel(species=i_spc))).var(dim='time').values
 
 
-if __name__ == '__main__':
+def validate_all():
 
-    iteration = 51
+    iteration = 531
 
-    root = Path('/work/MadKF/CLSM/iter_%i/validation' % iteration)
 
-    if not (root).exists():
+
+    if not root.exists():
         Path.mkdir(root, parents=True)
 
-    # insitu_evaluation(root, iteration)
-    # TCA_insitu_evaluation(root, iteration)
+    insitu_evaluation(root, iteration)
+    TCA_insitu_evaluation(root, iteration)
     filter_diagnostics_evaluation(root, iteration)
+
+
+if __name__ == '__main__':
+    validate_all()
+
 
 
 

@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 
 
-def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False):
+def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False, window_size=35):
 
     if (output=='climatology')&(longterm is True):
         output = 'climSer'
@@ -28,7 +28,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False)
         if method=='mean':
             clim = calc_clim_harmonic(xSer, n=0)
         if (method=='moving_average')|(method=='ma'):
-            clim = calc_clim_moving_average(xSer)
+            clim = calc_clim_moving_average(xSer, window_size=window_size)
         if output == 'climatology':
             return clim
         climSer[:] = clim[doys]
@@ -41,7 +41,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False)
             if method == 'mean':
                 clim = calc_clim_harmonic(xSer[years == yr], n=0)
             if (method == 'moving_average') | (method == 'ma'):
-                clim = calc_clim_moving_average(xSer[years == yr])
+                clim = calc_clim_moving_average(xSer[years == yr], window_size=window_size)
             climSer[years == yr] = clim[doys[years == yr]].values
 
     if output == 'climSer':
@@ -109,7 +109,7 @@ def calc_clim_harmonic(Ser, n=3, cutoff=True):
 
     return clim
 
-def calc_clim_moving_average(Ser, window_size=35, n_min=17, return_n=False):
+def calc_clim_moving_average(Ser, window_size=35, n_min=5, return_n=False):
     """
     Calculates the mean seasonal cycle as long-term mean within a moving average window.
 
@@ -163,6 +163,18 @@ def calc_clim_moving_average(Ser, window_size=35, n_min=17, return_n=False):
         return clim, n_data
 
 
+def calc_clim_p(ts, mode='pentadal', n=3):
+
+    if mode == 'pentadal':
+        clim = calc_pentadal_mean(ts)
+    else:
+        clim = calc_clim_harmonic(ts, n=n)
+        pentads = np.floor((clim.index.values - 1) / 5.)
+        clim = clim.groupby(pentads,axis=0).mean()
+        clim.index = np.arange(73)+1
+
+    return clim
+
 
 def calc_pentadal_mean(Ser, n_min=20, return_n=False):
     """
@@ -206,6 +218,11 @@ def calc_pentadal_mean(Ser, n_min=20, return_n=False):
 
         if n_data[p] >= n_min:
             clim[p] = xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.mean()
+
+    # TODO: currently, time series is returned per pentand... the following can map it to 365 values.
+    # doys = np.arange(1, 366).astype('int')
+    # ind = np.floor((doys - 1) / 5.).astype('int') + 1
+    # clim365 = pd.Series(clim_fcst.loc[ind].values, index=doys)
 
     if return_n is False:
         return clim
