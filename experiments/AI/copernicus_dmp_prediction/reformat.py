@@ -78,7 +78,7 @@ def reformat(path_in, path_out):
     lonmin = -100
     lonmax = -90
 
-    files = np.sort(list(root.glob('**/*.nc')))
+    files = np.sort(list(path_in.glob('**/c_gls*.nc')))
     dates = pd.DatetimeIndex([f.name.split('_')[-4] for f in files])
 
     with Dataset(files[0]) as ds:
@@ -99,9 +99,9 @@ def reformat(path_in, path_out):
                     fout[var][i,:,:] = ds[var][:,ind_lat,ind_lon]
 
 
-    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
-    cmd = ' '.join([cmdBase, str(fname_img), str(fname_ts)])
-    os.system(cmd)
+    #cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
+    #cmd = ' '.join([cmdBase, str(fname_img), str(fname_ts)])
+    #os.system(cmd)
 
 if __name__=='__main__':
 
