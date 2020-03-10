@@ -1,43 +1,65 @@
 
 import numpy as np
-from scipy.special import expit as sigmoid
+import pandas as pd
+
+from netCDF4 import Dataset
+
+import torch
+import torch.nn as nn
+
+
+def get_data_sample():
+
+    lut = pd.read_csv('/Users/u0116961/Documents/work/machine_learning/test_data/MERRA2/grid_lut.csv', index_col=0)
+
+    i_lat = 500
+    i_lon = 500
+
+    ds = Dataset('/Users/u0116961/Documents/work/machine_learning/test_data/COPERNICUS_DMP/DMP_COPERNICUS_timeseries.nc')
+    dmp_ts = pd.Series(ds['DMP'][:,i_lat,i_lon])
+
+    lat = ds['lat'][i_lat]
+    lon = ds['lon'][i_lon]
+
+    idx = ((lut['merra2_lat']-lat)**2 + (lut['merra2_lon']-lon)**2).idxmin()
+
+    ssm_ts = pd.read_csv('/Users/u0116961/Documents/work/machine_learning/test_data/MERRA2/timeseries/%i.csv' % idx, index_col=0, header=None, names=['ssm'], parse_dates=True)
+    ssm_ts = ssm_ts.resample('1D').mean()
 
 
 
-def forget_gate(x, h, Weights_hf, Bias_hf, Weights_xf, Bias_xf, prev_cell_state):
-    forget_hidden  = np.dot(Weights_hf, h) + Bias_hf
-    forget_eventx  = np.dot(Weights_xf, x) + Bias_xf
-    return np.multiply( sigmoid(forget_hidden + forget_eventx), prev_cell_state )
 
+def get_neuron_number(n_input=3, n_output=1, n_samples=200, alpha=7):
+    return round(n_samples / (alpha * (n_input + n_output)))
 
-
-def input_gate(x, h, Weights_hi, Bias_hi, Weights_xi, Bias_xi, Weights_hl, Bias_hl, Weights_xl, Bias_xl):
-    ignore_hidden  = np.dot(Weights_hi, h) + Bias_hi
-    ignore_eventx  = np.dot(Weights_xi, x) + Bias_xi
-    learn_hidden   = np.dot(Weights_hl, h) + Bias_hl
-    learn_eventx   = np.dot(Weights_xl, x) + Bias_xl
-    return np.multiply( sigmoid(ignore_eventx + ignore_hidden), np.tanh(learn_eventx + learn_hidden) )
-
-
-
-def update_cell_state(forget_gate_output, input_gate_output):
-    return forget_gate_output + input_gate_output
-
-
-def output_gate(x, h, Weights_ho, Bias_ho, Weights_xo, Bias_xo, cell_state):
-    out_hidden = np.dot(Weights_ho, h) + Bias_ho
-    out_eventx = np.dot(Weights_xo, x) + Bias_xo
-    return np.multiply( sigmoid(out_eventx + out_hidden), np.tanh(cell_state) )
 
 #Set Parameters for a small LSTM network
-input_size  = 2 # size of one 'event', or sample, in our batch of data
-hidden_dim  = 3 # 3 cells in the LSTM layer
-output_size = 1 # desired model output
+input_dim  = 5          # dimension of input layer
+hidden_dim  = 10        # dimension of hidden layer / cell state
+n_layers = 1            # number of LSTM cells
 
-def model_output(lstm_output, fc_Weight, fc_Bias):
-  '''Takes the LSTM output and transforms it to our desired
-  output size using a final, fully connected layer'''
-  return np.dot(fc_Weight, lstm_output) + fc_Bias
+seq_len = 1             # size of predictive sequence
+batch_size = 1          # size of training batches
+
+output_size = 1         # size of the output
+
+
+
+lstm = nn.LSTM(input_dim, hidden_dim, n_layers, batch_first=True)
+
+h0 = torch.randn(n_layers, batch_size, hidden_dim)  # initial hidden state
+c0 = torch.randn(n_layers, batch_size, hidden_dim)  # initial cell state
+initial = (h0, c0)
+
+inp = torch.randn(batch_size, seq_len, input_dim)
+
+out, (hn, cn) = lstm(inp, (h0, c0))
+
+print("Output shape: ", out.shape)
+print("Hidden: ", hidden)
+
+
+
 
 
 
