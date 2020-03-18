@@ -52,3 +52,43 @@ ax1.set_ylabel('Variance Explained\n(fractional)', color='0.75', fontsize=20)
 ax1.set_xlabel('Eigenvector Number', color='0.75', fontsize=20)
 
 ax1.tick_params(labelsize=15, color='0.75', labelcolor='0.75')
+
+#
+# from datetime import datetime as dt
+#
+# n = 1000000
+#
+# k = 2
+#
+mean = np.zeros(k)
+cov = np.identity(k) * np.arange(1,k+1)
+
+X = np.random.multivariate_normal(mean,cov,n)
+X -= X.mean(axis=0)
+
+# Calculate Eigenvalues
+
+t = dt.now()
+C = np.dot(X.T, X) / (n-1)
+eigen_vals, eigen_vecs = np.linalg.eig(C)
+X_pca = np.dot(X, eigen_vecs)
+print((dt.now() - t).microseconds/1e6)
+
+# Calculate Singular Values
+t = dt.now()
+U, sig, _ = np.linalg.svd(X, full_matrices=False, compute_uv=True)
+X_svd = np.dot(U, np.diag(sig))
+print((dt.now() - t).microseconds/1e6)
+
+# Demonstrate that Eigenvalues = Singular Values ** 2 / (n-1)
+# Relationship between singular values and eigen values:
+
+print(np.square(sig) / (n - 1))
+print(eigen_vals)
+
+print(np.allclose(np.square(sig) / (n - 1), eigen_vals))
+
+Alternative:
+from sklearn.decomposition import PCA
+pca = PCA(n_components=4)
+pca_result = pca.fit_transform(df[feat_cols].values)
