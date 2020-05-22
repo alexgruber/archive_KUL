@@ -8,7 +8,6 @@ from collections import OrderedDict
 
 from netCDF4 import Dataset, date2num, num2date
 
-
 def ncfile_init(fname, dimensions, variables):
 
     ds = Dataset(fname, mode='w')
@@ -59,7 +58,7 @@ def ncfile_init(fname, dimensions, variables):
 
 def reformat():
 
-    fname_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/MERRA2.nc4')
+    fname_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/MERRA2_images.nc4')
     root = Path('/staging/leuven/stg_00024/input/met_forcing/MERRA2_land_forcing')
 
     # fname_out = Path('/Users/u0116961/work/test.nc4')
@@ -81,6 +80,7 @@ def reformat():
     data = np.full((7, len(dates), len(lats), len(lons)), -9999.)
 
     for i, date in enumerate(dates):
+        print('%i / %i' % (i, len(dates)))
         try:
             with Dataset(list(root.glob('**/*_lnd_*' + date.strftime('%Y%m%d') + '.nc4'))[0]) as ds:
                 for j, var in enumerate(variables):
@@ -95,7 +95,15 @@ def reformat():
         for i, var in enumerate(variables):
             ds[var][:,:,:] = data[i,:,:,:]
 
-
 if __name__=='__main__':
     reformat()
+
+# import sys
+# import getpass
+# uid = getpass.getuser()
+# sys.path.append('/data/leuven/' + uid[3:6] + '/' + uid + '/python')
+# from myprojects.readers.merra2 import reformat
+# reformat()
+
+# ncks -4 -L 4 --cnk_dmn time,10000 --cnk_dmn lat,1 --cnk_dmn lon,1 MERRA2_images.nc4 MERRA2_timeseries.nc4
 

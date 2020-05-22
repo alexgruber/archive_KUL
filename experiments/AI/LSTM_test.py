@@ -20,38 +20,61 @@ import seaborn as sns
 
 from sklearn.preprocessing import MinMaxScaler
 
-def get_data_sample():
-
-    lut = pd.read_csv('/Users/u0116961/Documents/work/machine_learning/test_data/MERRA2/grid_lut.csv', index_col=0)
-
-    i_lat = 500
-    i_lon = 500
-
-    ds = Dataset('/Users/u0116961/Documents/work/machine_learning/test_data/COPERNICUS_DMP/DMP_COPERNICUS_timeseries.nc')
-    dmp_ts = pd.DataFrame({'DMP': ds['DMP'][:,i_lat,i_lon]}, index=pd.DatetimeIndex(num2date(ds['time'][:], ds['time'].units)))
-    dmp_ts['dekad'] = (dmp_ts.index.day.values / 10.).round().astype('int') + (dmp_ts.index.month.values.astype('int')-1)*3
-    dmp_ts['seas'] = np.convolve(dmp_ts['DMP'], np.ones(5) / 5, mode='same')
-    dmp_ts['clim'] = np.convolve(dmp_ts['DMP'].groupby(dmp_ts['dekad']).mean(), np.ones(3) / 3., 'same')[dmp_ts['dekad']-1]
-    dmp_ts['anom_st'] = dmp_ts['DMP'] - dmp_ts['seas']
-    dmp_ts['anom_lt'] = dmp_ts['DMP'] - dmp_ts['clim']
-
-    # lat = ds['lat'][i_lat]
-    # lon = ds['lon'][i_lon]
-    #
-    # idx = ((lut['merra2_lat']-lat)**2 + (lut['merra2_lon']-lon)**2).idxmin()
-    #
-    # ssm_ts = pd.read_csv('/Users/u0116961/Documents/work/machine_learning/test_data/MERRA2/timeseries/%i.csv' % idx, index_col=0, header=None, names=['ssm'], parse_dates=True)
-    # ssm_ts = ssm_ts.resample('1D').mean()
-    # ssm_ts['seas'] = np.convolve(ssm_ts['ssm'], np.ones(31)/31, 'same')
-    # ssm_ts['anom_st'] = ssm_ts['ssm'] - ssm_ts['seas']
-
-    return dmp_ts
-
 
 def get_neuron_number(n_input=3, n_output=1, n_samples=200, alpha=7):
     """Rule of thumb for estimating the 'optimal' number of hidden neurons"""
 
     return round(n_samples / (alpha * (n_input + n_output)))
+
+
+#     ######################    PyToarch Cheat Sheet stuff
+#     # validate the model #
+#     ######################
+#     model.eval()
+#     for batch_idx, (data, target) in enumerate(valid_loader):
+#         # move to GPU
+#         if use_cuda:
+#             data, target = data.cuda(), target.cuda()
+#         ## update the average validation loss
+#         output = model(data)
+#         loss = criterion(output, target)
+#         valid_loss = valid_loss + ((1 / (batch_idx + 1)) * (loss.data - valid_loss))
+#
+#     # print training/validation statistics
+#     print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'.format(
+#         epoch,
+#         train_loss,
+#         valid_loss
+#     ))
+#
+#     ## TODO: save the model if validation loss has decreased
+#     if valid_loss < valid_loss_min:
+#         torch.save(model.state_dict(), save_path)
+#         print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
+#             valid_loss_min,
+#             valid_loss))
+#         valid_loss_min = valid_loss
+#
+#
+# # return trained model
+# return model
+
+#  write and then use your custom load_checkpoint function
+# model = load_checkpoint('checkpoint_resnet50.pth')
+# print(model)
+# # use pytorch torch.load and load_state_dict(state_dict)
+# checkpt = torch.load(‘checkpoint_resnet50.pth’)
+# model.load_state_dict(checkpt)
+# #save locally, map the new class_to_idx, move to cpu
+# #note down model architecture
+# checkpoint['class_to_idx']
+# model.class_to_idx = image_datasets['train'].class_to_idx
+# model.cpu()
+# torch.save({'arch': 'resnet18',
+#            'state_dict': model.state_dict(),
+#            'class_to_idx': model.class_to_idx},
+#            'classifier.pth')
+
 
 
 

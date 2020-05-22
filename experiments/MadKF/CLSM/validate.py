@@ -1,6 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
 
-
-import os
 import logging
 
 import numpy as np
@@ -28,7 +28,7 @@ def insitu_evaluation(root, iteration):
 
     result_file = root / 'insitu.csv'
 
-    noDA = LDAS_io('xhourly',           'US_M36_SMOS40_noDA_cal_scaled')
+    noDA = LDAS_io('xhourly',           'US_M36_SMOS40_TB_MadKF_OL_it532')
     DA_const_err = LDAS_io('xhourly',   'US_M36_SMOS40_DA_cal_scaled')
     DA_MadKF = LDAS_io('xhourly',       'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration)
 
@@ -36,7 +36,7 @@ def insitu_evaluation(root, iteration):
 
     ismn = ISMN_io()
 
-    runs = ['noDA', 'DA_const_err','DA_madkf']
+    runs = ['noDA', 'DA_const_err', 'DA_madkf']
     tss = [noDA.timeseries, DA_const_err.timeseries, DA_MadKF.timeseries.transpose('lat','lon','time')]
 
     variables = ['sm_surface','sm_rootzone','sm_profile']
@@ -73,8 +73,9 @@ def insitu_evaluation(root, iteration):
 
                 for run,ts_model in zip(runs,tss):
 
-                    ind = (ts_model['snow_mass'][row, col].values == 0)&(ts_model['soil_temp_layer1'][row, col].values > 277.15)
-                    ts_mod = ts_model[var][row, col].to_series().loc[ind]
+                    ind = (ts_model['snow_mass'].isel(lat=row, lon=col).values == 0)&\
+                          (ts_model['soil_temp_layer1'].isel(lat=row, lon=col).values > 277.15)
+                    ts_mod = ts_model[var].isel(lat=row, lon=col).to_series().loc[ind]
                     if len(ts_mod) < 10:
                         continue
 
@@ -86,7 +87,7 @@ def insitu_evaluation(root, iteration):
                     else:
                         ts_mod = calc_anomaly(ts_mod, method='moving_average', longterm=mode=='longterm').dropna()
 
-                    tmp = pd.DataFrame({1: ts_ref, 2: ts_mod}).loc[t_ana,:].dropna()
+                    tmp = pd.DataFrame({1: ts_ref, 2: ts_mod}).reindex(t_ana).dropna()
                     res['len_' + mode + '_' + var] = len(tmp)
 
                     if len(tmp) < 10:
@@ -99,7 +100,7 @@ def insitu_evaluation(root, iteration):
                     res['ubrmsd_' + run +'_' + mode + '_' + var] = np.sqrt((((tmp[1]-tmp[1].mean())-(tmp[2]-tmp[2].mean()))**2).mean())
 
 
-        if not os.path.isfile(result_file):
+        if not result_file.exists():
             res.to_csv(result_file, float_format='%0.4f')
         else:
             res.to_csv(result_file, float_format='%0.4f', mode='a', header=False)
@@ -108,20 +109,20 @@ def insitu_evaluation(root, iteration):
 def lonlat2gpi(lon,lat,gpi_list):
 
     rdiff = np.sqrt((gpi_list.lon - lon)**2 + (gpi_list.lat - lat)**2)
-    return gpi_list.iloc[np.where((rdiff - rdiff.min()) < 0.0001)[0][0],0]
+    return gpi_list.iloc[np.where((rdiff - rdiff.min()) < 0.0001)[0][0]].name
 
 def TCA_insitu_evaluation(root, iteration):
 
     result_file = root / 'insitu_TCA.csv'
 
-    noDA = LDAS_io('xhourly', 'US_M36_SMOS40_noDA_cal_scaled')
+    noDA = LDAS_io('xhourly', 'US_M36_SMOS40_TB_MadKF_OL_it532')
     DA_const_err = LDAS_io('xhourly', 'US_M36_SMOS40_DA_cal_scaled')
     DA_MadKF = LDAS_io('xhourly', 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration)
 
     t_ana = pd.DatetimeIndex(LDAS_io('ObsFcstAna', 'US_M36_SMOS40_DA_cal_scaled').timeseries.time.values).sort_values()
 
     ascat = HSAF_io()
-    gpi_list = pd.read_csv('/data_sets/ASCAT/warp5_grid/pointlist_warp_conus.csv',index_col=0)
+    gpi_list = pd.read_csv(ascat.root / 'warp5_grid' / 'pointlist_warp_conus.csv',index_col=0)
 
     ismn = ISMN_io()
 
@@ -131,11 +132,20 @@ def TCA_insitu_evaluation(root, iteration):
     variables = ['sm_surface','sm_rootzone','sm_profile']
     modes = ['absolute','longterm','shortterm']
 
+    if result_file.exists():
+        tmp_res = pd.read_csv(result_file, index_col=0)
+        start = np.where((ismn.list.network == tmp_res.network.iloc[-1])&(ismn.list.station == tmp_res.station.iloc[-1]))[0][0]+1
+        ismn.list = ismn.list.iloc[69:,:]
+
     for i, (meta, ts_insitu) in enumerate(ismn.iter_stations(surface_only=False)):
+        if 'tmp_res' in locals():
+            if (meta.network in tmp_res) & (meta.station in tmp_res):
+                print(f'Skipping {i}')
+                continue
+
         logging.info('%i/%i' % (i, len(ismn.list)))
 
         try:
-
             res = pd.DataFrame(meta.copy()).transpose()
             col = meta.ease_col
             row = meta.ease_row
@@ -167,16 +177,16 @@ def TCA_insitu_evaluation(root, iteration):
 
                     for run, ts_model in zip(runs, tss):
 
-                        ind = (ts_model['snow_mass'][row, col].values == 0) & (
-                                    ts_model['soil_temp_layer1'][row, col].values > 277.15)
+                        ind = (ts_model['snow_mass'].isel(lat=row, lon=col).values == 0)&\
+                              (ts_model['soil_temp_layer1'].isel(lat=row, lon=col).values > 277.15)
 
-                        ts_model = ts_model[var][row, col].to_series().loc[ind]
+                        ts_model = ts_model[var].isel(lat=row, lon=col).to_series().loc[ind]
                         ts_model.index += pd.to_timedelta('2 hours')
 
                         if mode == 'absolute':
-                            ts_mod = ts_model.loc[t_ana].dropna()
+                            ts_mod = ts_model.reindex(t_ana).dropna()
                         else:
-                            ts_mod = calc_anomaly(ts_model.loc[t_ana], method='moving_average',
+                            ts_mod = calc_anomaly(ts_model.reindex(t_ana), method='moving_average',
                                                   longterm=(mode == 'longterm')).dropna()
                         ts_mod.name = 'model'
                         ts_mod = pd.DataFrame(ts_mod)
@@ -199,7 +209,7 @@ def TCA_insitu_evaluation(root, iteration):
 
                         res['len_' + mode + '_' + var] = len(data)
 
-            if not os.path.isfile(result_file):
+            if not result_file.exists():
                 res.to_csv(result_file, float_format='%0.4f')
             else:
                 res.to_csv(result_file, float_format='%0.4f', mode='a', header=False)
@@ -268,16 +278,16 @@ def filter_diagnostics_evaluation(root, iteration):
 
 def validate_all():
 
-    iteration = 531
+    iteration = 61
 
-
+    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/iter_{iteration}/validation')
 
     if not root.exists():
         Path.mkdir(root, parents=True)
 
-    insitu_evaluation(root, iteration)
+    # insitu_evaluation(root, iteration)
     TCA_insitu_evaluation(root, iteration)
-    filter_diagnostics_evaluation(root, iteration)
+    # filter_diagnostics_evaluation(root, iteration)
 
 
 if __name__ == '__main__':

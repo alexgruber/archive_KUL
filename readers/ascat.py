@@ -6,6 +6,8 @@ import platform
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
+
 from netCDF4 import Dataset, num2date
 
 from pyldas.interface import LDAS_io
@@ -15,17 +17,17 @@ class HSAF_io(object):
     def __init__(self, root=None, version='h113', ext='h114'):
 
         if root is None:
-            if platform.system() == 'Windows':
-                root = os.path.join('D:','data_sets', 'ASCAT')
-            elif platform.system() == 'Linux':
-                root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'ASCAT')
+            if platform.system() == 'Linux':
+                self.root = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/ASCAT')
             else:
-                root = os.path.join('/','data_sets', 'ASCAT')
+                self.root = Path('~/data_sets/ASCAT').expanduser()
+        else:
+            self.root = Path(root)
 
-        self.data_path = os.path.join(root, version)
+        self.data_path = os.path.join(self.root, version)
         self.version = version.upper()
 
-        grid = Dataset(os.path.join(root, 'warp5_grid', 'TUW_WARP5_grid_info_2_2.nc'))
+        grid = Dataset(os.path.join(self.root, 'warp5_grid', 'TUW_WARP5_grid_info_2_2.nc'))
         self.gpis = grid['gpi'][:][grid['land_flag'][:]==1]
         self.cells = grid['cell'][:][grid['land_flag'][:]==1]
         grid.close()
@@ -34,7 +36,7 @@ class HSAF_io(object):
         self.fid = None
 
         if ext is not None:
-            self.ext = HSAF_io(root=root, version=ext, ext=None)
+            self.ext = HSAF_io(root=self.root, version=ext, ext=None)
         else:
             self.ext = None
 
@@ -90,12 +92,11 @@ class HSAF_io(object):
         sm = self.fid['sm'][start:end][ind_valid]
 
         if resample_time is True:
-            time = num2date(self.fid['time'][start:end][ind_valid].round(),
-                            units=self.fid['time'].units)
+            time = num2date(self.fid['time'][start:end][ind_valid].round(), units=self.fid['time'].units,
+                            only_use_python_datetimes=True, only_use_cftime_datetimes=False)
         else:
-            time = num2date(self.fid['time'][start:end][ind_valid],
-                            units=self.fid['time'].units)
-
+            time = num2date(self.fid['time'][start:end][ind_valid], units=self.fid['time'].units,
+                            only_use_python_datetimes=True, only_use_cftime_datetimes=False)
 
         ts = pd.Series(sm, index=time)
         ts = ts.groupby(ts.index).mean()

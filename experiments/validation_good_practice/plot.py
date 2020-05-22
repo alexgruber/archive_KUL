@@ -59,7 +59,6 @@ def plot_ease_img(data,tag,
         for t in cb.ax.get_yticklabels():
             t.set_fontsize(fontsize)
 
-
     if title != '':
         plt.title(title,fontsize=fontsize)
 

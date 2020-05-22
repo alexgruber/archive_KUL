@@ -415,8 +415,6 @@ def plot_ismn_statistics_v3(root):
             plt.figlegend((box['boxes'][0:4]),run_labels,'upper right',fontsize=fontsize-4)
         ax.set_title(tit ,fontsize=fontsize)
 
-    plt.tight_layout()
-
     fout = root / 'plots' / 'ismn_stats.png'
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
@@ -513,8 +511,8 @@ def plot_improvement_vs_uncertainty_update(iteration):
 
 if __name__=='__main__':
 
-    iteration = 5
-    root = Path('/work/MadKF/CLSM/iter_%i/validation' % iteration)
+    iteration = 62
+    root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
 
     if not (root / 'plots').exists():
         Path.mkdir((root / 'plots'), parents=True)

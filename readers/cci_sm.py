@@ -19,7 +19,7 @@ class CCISM_io(object):
         if platform.system() == 'Windows':
             self.root = os.path.join('D:','data_sets', 'ESA_CCI_SM')
         else:
-            self.root = os.path.join('/','data_sets', 'ESA_CCI_SM')
+            self.root = os.path.join('~','data_sets', 'ESA_CCI_SM')
 
 
         self.versions = ['v02.2','v03.3', 'v04.4']

@@ -38,7 +38,7 @@ class MSWEP_io(object):
             elif platform.system() == 'Linux':
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'MSWEP')
             else:
-                root = os.path.join('/', 'data_sets', 'MSWEP_v21')
+                root = os.path.join('~', 'data_sets', 'MSWEP_v21')
 
         if cellfiles is True:
             self.root = os.path.join(root, 'cellfiles')

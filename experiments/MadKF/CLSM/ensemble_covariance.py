@@ -1,4 +1,6 @@
 
+import os
+os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
 
 import pandas as pd
 import numpy as np
@@ -26,12 +28,10 @@ def tca(df):
     return err_var
 
 
-def calc_tb_mse(root, iteration, anomaly=True):
+def calc_tb_mse(root, iteration, anomaly=True, anom_type='harmonic'):
 
-    # exp_ol = 'US_M36_SMOS40_TB_ens_test_OL'
-    # exp_da = 'US_M36_SMOS40_TB_MadKF_it%i' % iteration
-    exp_ol = 'US_M36_SMOS40_TB_MadKF_OL_it%i' % iteration
-    exp_da = 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration
+    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
 
     param = 'ObsFcstAna'
 
@@ -39,15 +39,15 @@ def calc_tb_mse(root, iteration, anomaly=True):
     io_da = LDAS_io(param, exp_da)
 
     res = pd.DataFrame(index=io_ol.grid.tilecoord.index.values,
-                       columns=['col', 'row'] + ['mse_obs_spc%i'%spc for spc in [1,2,3,4]] \
-                                              + ['mse_fcst_spc%i'%spc for spc in [1,2,3,4]] \
-                                              + ['mse_ana_spc%i'%spc for spc in [1,2,3,4]])
+                       columns=['col', 'row'] + [f'mse_obs_spc{spc}' for spc in [1,2,3,4]] \
+                                              + [f'mse_fcst_spc{spc}' for spc in [1,2,3,4]] \
+                                              + [f'mse_ana_spc{spc}' for spc in [1,2,3,4]])
 
     ids = io_ol.grid.tilecoord['tile_id'].values
     res.loc[:, 'col'], res.loc[:, 'row'] = np.vectorize(io_ol.grid.tileid2colrow)(ids, local_cs=False)
 
     for cnt, (idx, val) in enumerate(io_ol.grid.tilecoord.iterrows()):
-        print('%i / %i' % (cnt, len(res)))
+        print(f'{cnt} / {len(res)}')
 
         col, row = io_ol.grid.tileid2colrow(val.tile_id)
 
@@ -57,24 +57,19 @@ def calc_tb_mse(root, iteration, anomaly=True):
             ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
             if len(ts_ana) == 0:
                 continue
-            ts_fcst = ts_fcst.loc[ts_ana.index]
+            ts_fcst = ts_fcst.reindex(ts_ana.index)
 
             if anomaly is True:
-                # ts_fcst = calc_anomaly(ts_fcst, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
-                # ts_obs = calc_anomaly(ts_obs, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
-                # ts_ana = calc_anomaly(ts_ana, method='harmonic', output='anomaly', longterm=False, window_size=45).dropna()
-
-                ts_fcst = calc_anomaly(ts_fcst, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
-                ts_obs = calc_anomaly(ts_obs, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
-                ts_ana = calc_anomaly(ts_ana, method='ma', output='anomaly', longterm=False, window_size=45).dropna()
+                ts_fcst = calc_anomaly(ts_fcst, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
+                ts_obs = calc_anomaly(ts_obs, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
+                ts_ana = calc_anomaly(ts_ana, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
 
             df = pd.concat((ts_obs,ts_fcst,ts_ana),axis=1).dropna()
-            # print(len(df))
             tc_res = tca(df)
 
-            res.loc[idx,'mse_obs_spc%i'%spc] = tc_res[0]
-            res.loc[idx,'mse_fcst_spc%i'%spc] = tc_res[1]
-            res.loc[idx,'mse_ana_spc%i'%spc] = tc_res[2]
+            res.loc[idx,f'mse_obs_spc{spc}'] = tc_res[0]
+            res.loc[idx,f'mse_fcst_spc{spc}'] = tc_res[1]
+            res.loc[idx,f'mse_ana_spc{spc}'] = tc_res[2]
 
     fname = root / 'result_files' / 'mse.csv'
 
@@ -82,10 +77,8 @@ def calc_tb_mse(root, iteration, anomaly=True):
 
 def calc_ens_var(root, iteration):
 
-    # exp_ol = 'US_M36_SMOS40_TB_ens_test_OL'
-    # exp_da = 'US_M36_SMOS40_TB_MadKF_it%i' % iteration
-    exp_ol = 'US_M36_SMOS40_TB_MadKF_OL_it%i' % iteration
-    exp_da = 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration
+    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
 
     param = 'ObsFcstAnaEns'
     # param = 'ObsFcstAna'
@@ -94,9 +87,9 @@ def calc_ens_var(root, iteration):
     io_da = LDAS_io(param, exp_da)
 
     res = pd.DataFrame(index=io_ol.grid.tilecoord.index.values,
-                       columns=['col', 'row'] + ['obs_var_spc%i'%spc for spc in [1,2,3,4]] \
-                                              + ['fcst_var_spc%i'%spc for spc in [1,2,3,4]] \
-                                              + ['ana_var_spc%i'%spc for spc in [1,2,3,4]])
+                       columns=['col', 'row'] + [f'obs_var_spc{spc}' for spc in [1,2,3,4]] \
+                                              + [f'fcst_var_spc{spc}' for spc in [1,2,3,4]] \
+                                              + [f'ana_var_spc{spc}' for spc in [1,2,3,4]])
 
     ids = io_ol.grid.tilecoord['tile_id'].values
     res.loc[:, 'col'], res.loc[:, 'row'] = np.vectorize(io_ol.grid.tileid2colrow)(ids, local_cs=False)
@@ -112,16 +105,16 @@ def calc_ens_var(root, iteration):
             ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
             if len(ts_ana) == 0:
                 continue
-            ts_fcst = ts_fcst.loc[ts_ana.index]
-            ts_obs = ts_obs.loc[ts_ana.index]
+            ts_fcst = ts_fcst.reindex(ts_ana.index)
+            ts_obs = ts_obs.reindex(ts_ana.index)
 
-            res.loc[idx,'obs_var_spc%i'%spc] = ts_obs.var(axis='columns').mean()
-            res.loc[idx,'fcst_var_spc%i'%spc] = ts_fcst.var(axis='columns').mean()
-            res.loc[idx,'ana_var_spc%i'%spc] = ts_ana.var(axis='columns').mean()
+            res.loc[idx,f'obs_var_spc{spc}'] = ts_obs.var(axis='columns').mean()
+            res.loc[idx,f'fcst_var_spc{spc}'] = ts_fcst.var(axis='columns').mean()
+            res.loc[idx,f'ana_var_spc{spc}'] = ts_ana.var(axis='columns').mean()
 
-            # res.loc[idx,'obs_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
-            # res.loc[idx,'fcst_var_spc%i'%spc] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
-            # res.loc[idx,'ana_var_spc%i'%spc] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
 
     fname = root / 'result_files' / 'ens_var.csv'
 
@@ -150,10 +143,8 @@ def smooth_parameters(root):
 
 def calc_ens_cov(root, iteration):
 
-    # exp_ol = 'US_M36_SMOS40_TB_ens_test_OL'
-    # exp_da = 'US_M36_SMOS40_TB_MadKF_it%i' % iteration
-    exp_ol = 'US_M36_SMOS40_TB_MadKF_OL_it%i' % iteration
-    exp_da = 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration
+    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
 
     param = 'ObsFcstAnaEns'
 
@@ -177,8 +168,8 @@ def calc_ens_cov(root, iteration):
             ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
             if len(ts_ana) == 0:
                 continue
-            ts_ol = ts_ol.loc[ts_ana.index,:]
-            ts_obs = ts_obs.loc[ts_ana.index,:]
+            ts_ol = ts_ol.reindex(ts_ana.index)
+            ts_obs = ts_obs.reindex(ts_ana.index)
 
             tmp_c_ol_obs = np.full(len(ts_ol),np.nan)
             tmp_c_ol_ana = np.full(len(ts_ol),np.nan)
@@ -192,9 +183,9 @@ def calc_ens_cov(root, iteration):
                 except:
                     pass
 
-            res.loc[idx,'c_ol_obs_spc%i'%spc] = np.nanmean(tmp_c_ol_obs)
-            res.loc[idx,'c_ol_ana_spc%i'%spc] = np.nanmean(tmp_c_ol_ana)
-            res.loc[idx,'c_obs_ana_spc%i'%spc] = np.nanmean(tmp_c_obs_ana)
+            res.loc[idx,f'c_ol_obs_spc{spc}'] = np.nanmean(tmp_c_ol_obs)
+            res.loc[idx,f'c_ol_ana_spc{spc}'] = np.nanmean(tmp_c_ol_ana)
+            res.loc[idx,f'c_obs_ana_spc{spc}'] = np.nanmean(tmp_c_obs_ana)
 
     fname = root / 'result_files' / 'ens_cov.csv'
 
@@ -216,8 +207,7 @@ def plot_ease_img2(data, tag,
 
     lons, lats = np.meshgrid(io.grid.ease_lons, io.grid.ease_lats)
 
-    img = np.empty(lons.shape, dtype='float32')
-    img.fill(None)
+    img = np.full(lons.shape, np.nan)
 
     ind_lat = tc.loc[data.index.values, 'j_indg']
     ind_lon = tc.loc[data.index.values, 'i_indg']
@@ -305,28 +295,26 @@ def plot_ease_img(data,tag,
     x, y = m(-79, 25)
     plt.text(x, y, 'mean = %.2f' % np.ma.mean(img_masked), fontsize=fontsize - 4)
 
-def plot_ens_cov(root, last_it, smoothed=False):
+def plot_ens_cov(root, last_it, mode='', sub=''):
 
     fontsize = 16
 
-    sub = 'smoothed' if smoothed else ''
-
-    fname = root / 'result_files' / sub / 'ens_cov.csv'
+    fname = root / 'result_files' / 'ens_cov.csv'
     res = pd.read_csv(fname, index_col=0).dropna()
 
     # for corrected in [True]:
     for corrected in [False, True]:
 
         if corrected:
-            fname = Path('/work/MadKF/CLSM/iter_%i' % last_it) / 'result_files' / sub / 'mse.csv'
+            fname = Path(f'{str(root).split("_")[0]}_{last_it}') / mode / 'result_files' / sub / 'mse.csv'
             res0 = pd.read_csv(fname, index_col=0).dropna()
 
-            fname = root / 'result_files' / sub / 'ens_var.csv'
+            fname = root / 'result_files' / 'ens_var.csv'
             res1 = pd.read_csv(fname, index_col=0).dropna()
 
-            fname_out = root / 'plots' / sub / 'ens_cov_corrected.png'
+            fname_out = root / 'plots' / 'ens_cov_corrected.png'
         else:
-            fname_out = root / 'plots' / sub / 'ens_cov_uncorrected.png'
+            fname_out = root / 'plots' / 'ens_cov_uncorrected.png'
 
         plt.figure(figsize=(25,11))
 
@@ -377,43 +365,39 @@ def plot_ens_cov(root, last_it, smoothed=False):
         plt.close()
 
 
-def correct_mse(curr_it, last_it, smoothed=False):
+def correct_mse(root, last_it, mode='', sub=''):
 
-    sub = 'smoothed' if smoothed else ''
+    xroot = Path(f'{str(root).split("_")[0]}_{last_it}') / mode / 'result_files' / sub
+    if not (fname := (xroot  / 'mse_corrected.csv')).exists():
+        print(f'WARNING: mse_corrected.csv does not exist for iteration {last_it}... Using mse.csv instead.')
+        fname = xroot  / 'mse.csv'
+    res0 = pd.read_csv(fname, index_col=0)
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % last_it) / 'result_files' / sub
-    res0 = pd.read_csv(root  / 'mse_corrected.csv', index_col=0)
-    # res0 = pd.read_csv(root  / 'mse.csv', index_col=0) #TODO: THIS SHOULD BE MSE_CORRECTED!!!
+    xroot = root / 'result_files'
+    res = pd.read_csv(xroot / 'mse.csv', index_col=0)
+    res1 = pd.read_csv(xroot / 'ens_var.csv', index_col=0)
+    cov = pd.read_csv(xroot / 'ens_cov.csv', index_col=0)
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it) / 'result_files' / sub
-    res = pd.read_csv(root / 'mse.csv', index_col=0)
-    res1 = pd.read_csv(root / 'ens_var.csv', index_col=0)
-    cov = pd.read_csv(root / 'ens_cov.csv', index_col=0)
-
-    fname_out = root / 'mse_corrected.csv'
+    fname_out = xroot / 'mse_corrected.csv'
 
     for spc in [1, 2, 3, 4]:
-        scl_obs = res0['mse_obs_spc%i' % spc] / res1['obs_var_spc%i' % spc]
-        scl_fcst = res0['mse_fcst_spc%i' % spc] / res1['fcst_var_spc%i' % spc]
-        scl_ana = res0['mse_ana_spc%i' % spc] / res1['ana_var_spc%i' % spc]
+        scl_obs = res0[f'mse_obs_spc{spc}'] / res1[f'obs_var_spc{spc}']
+        scl_fcst = res0[f'mse_fcst_spc{spc}'] / res1[f'fcst_var_spc{spc}']
+        scl_ana = res0[f'mse_ana_spc{spc}'] / res1[f'ana_var_spc{spc}']
 
-        cov['c_ol_obs_spc%i' % spc] *= np.sqrt(scl_fcst * scl_obs)
-        cov['c_ol_ana_spc%i' % spc] *= np.sqrt(scl_fcst * scl_ana)
-        cov['c_obs_ana_spc%i' % spc] *= np.sqrt(scl_obs * scl_ana)
+        cov[f'c_ol_obs_spc{spc}'] *= np.sqrt(scl_fcst * scl_obs)
+        cov[f'c_ol_ana_spc{spc}'] *= np.sqrt(scl_fcst * scl_ana)
+        cov[f'c_obs_ana_spc{spc}'] *= np.sqrt(scl_obs * scl_ana)
 
-        res['mse_obs_spc%i' % spc] = np.abs(res['mse_obs_spc%i' % spc] - cov['c_ol_ana_spc%i' % spc] + cov[
-            'c_obs_ana_spc%i' % spc])
-        res['mse_fcst_spc%i' % spc] = np.abs(res['mse_fcst_spc%i' % spc] + cov['c_ol_ana_spc%i' % spc] - cov[
-            'c_obs_ana_spc%i' % spc])
+        res[f'mse_obs_spc{spc}'] = np.abs(res[f'mse_obs_spc{spc}'] - cov[f'c_ol_ana_spc{spc}'] + cov[f'c_obs_ana_spc{spc}'])
+        res[f'mse_fcst_spc{spc}'] = np.abs(res[f'mse_fcst_spc{spc}'] + cov[f'c_ol_ana_spc{spc}'] - cov[f'c_obs_ana_spc{spc}'])
 
     res.to_csv(fname_out)
 
 
-def plot_mse(root, smoothed=False):
+def plot_mse(root, sub=''):
 
     fontsize = 16
-
-    sub = 'smoothed' if smoothed else ''
 
     for corrected in [False, True]:
     # for corrected in [False,]:
@@ -428,10 +412,8 @@ def plot_mse(root, smoothed=False):
         res = pd.read_csv(fname_in, index_col=0)
 
         plt.figure(figsize=(25,11))
-
-        cmap='jet'
-
         cbrange = [0, 12]
+        cmap='jet'
 
         for spc in [1, 2, 3, 4]:
 
@@ -691,13 +673,12 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
             io.write_fortran_block(fid, res[f].values)
         fid.close()
 
-def plot_P_R_check(curr_it, last_it):
+def plot_P_R_check(root, last_it):
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % last_it)
-    fname = root / 'result_files' / 'mse.csv'
+    xroot = Path(f'{str(root).split("_")[0]}_{last_it}')
+    fname = xroot / 'result_files' / 'mse.csv'
     res0 = pd.read_csv(fname, index_col=0).dropna()
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
     fname = root / 'result_files' / 'ens_var.csv'
     res1 = pd.read_csv(fname, index_col=0).dropna()
 
@@ -724,13 +705,12 @@ def plot_P_R_check(curr_it, last_it):
     plt.close()
 
 
-def plot_P_R_scl(curr_it, last_it):
+def plot_P_R_scl(root, last_it):
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % last_it)
-    fname = root / 'result_files' / 'mse.csv'
+    xroot = Path(f'{str(root).split("_")[0]}_{last_it}')
+    fname = xroot / 'result_files' / 'mse.csv'
     res0 = pd.read_csv(fname, index_col=0).dropna()
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
     fname = root / 'result_files' / 'ens_var.csv'
     res1 = pd.read_csv(fname, index_col=0).dropna()
 
@@ -763,12 +743,10 @@ def plot_P_R_scl(curr_it, last_it):
 
 
 
-def plot_perturbations(iteration, smoothed=False, gapfilled=True):
+def plot_perturbations(root):
 
     # sub = 'smoothed' if smoothed else 'gapfilled' if gapfilled else 'raw'
     sub = ''
-
-    root = Path('/work/MadKF/CLSM/iter_%i'% iteration)
 
     fA = root / 'error_files' / sub / 'SMOS_fit_Tb_A.bin'
     fD = root / 'error_files' / sub / 'SMOS_fit_Tb_D.bin'
@@ -796,43 +774,48 @@ def plot_perturbations(iteration, smoothed=False, gapfilled=True):
     plt.subplot(224)
     plot_ease_img2(imgD,'err_Tbv', cbrange=cbrange, title='V-pol (Dsc.)')
 
-    plt.tight_layout()
+    # plt.tight_layout()
     # plt.show()
 
-    plt.savefig(root / 'plots' / 'perturbations.png', dpi=plt.gcf().dpi)
+    plt.savefig(root / 'plots' / 'perturbations.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 if __name__=='__main__':
 
-    curr_it = 531
-    last_it = 4
+    curr_it = 61
+    anom_type='harmonic'      # 'harmonic' / 'moving_average' / ''
 
-    root = Path('/work/MadKF/CLSM/iter_%i' % curr_it)
+    last_it = 531
+    mode = 'anomaly'          # 'absolute' / 'anomaly' / ''
+    sub = anom_type
 
-    # if not (root / 'result_files').exists():
-    #     Path.mkdir(root / 'result_files', parents=True)
-    # if not (root / 'plots' / 'smoothed').exists():
-    #     Path.mkdir(root / 'plots'/ 'smoothed', parents=True)
-    # if not (root / 'error_files' / 'smoothed').exists():
-    #     Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
+    root = Path(f'~/Documents/work/MadKF/CLSM/iter_{curr_it}').expanduser()
 
-    calc_tb_mse(root, curr_it)
+    if not (root / 'result_files').exists():
+        Path.mkdir(root / 'result_files', parents=True)
+    if not (root / 'plots' / 'smoothed').exists():
+        Path.mkdir(root / 'plots'/ 'smoothed', parents=True)
+    if not (root / 'error_files' / 'smoothed').exists():
+        Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
+
+    calc_tb_mse(root, curr_it, anomaly=True, anom_type=anom_type)
     # calc_ens_var(root, curr_it)
     # calc_ens_cov(root, curr_it)
     # smooth_parameters(root)
 
-    # correct_mse(curr_it, last_it)
+    # correct_mse(root, last_it, mode=mode, sub=sub)
     # plot_mse(root)
 
     # plot_ens_var(root)
-    # plot_ens_cov(root, last_it)
+    # plot_ens_cov(root, last_it, mode=mode, sub=sub)
     # plot_obs_pert(root)
-
 
     # plot_P_R_check(curr_it, last_it)
     # plot_P_R_scl(curr_it, last_it)
 
-    write_spatial_errors(root, curr_it)
-    plot_perturbations(curr_it)
+    # write_spatial_errors(root, curr_it)
+    plot_perturbations(root)
+
+    # list(map(plot_perturbations, ('532', '533')))
 
 

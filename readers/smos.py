@@ -25,7 +25,7 @@ class SMOS_io(object):
             elif platform.system() == 'Linux':
                 root = os.path.join('/', 'data', 'leuven', '320', 'vsc32046', 'data_sets', 'SMOS')
             else:
-                root = os.path.join('/','data_sets', 'SMOS_L3')
+                root = os.path.join('~','data_sets', 'SMOS_L3')
 
         self.loaded_cell=None
         self.ds = None

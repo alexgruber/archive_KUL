@@ -1,10 +1,11 @@
 
-import os
 import pickle
 import platform
 
 import numpy as np
 import pandas as pd
+
+from pathlib import Path
 
 from ismn.readers import read_data
 from ismn.metadata_collector import collect_from_folder
@@ -19,12 +20,12 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-            self.root = os.path.join('/', 'data_sets', 'ISMN_CONUS_2010001_20181101')
+            self.root = Path('~/data_sets/ISMN_CONUS_20070101_20200101').expanduser()
         else:
-            self.root = path
+            self.root = Path(path)
 
-        self.meta_file = os.path.join(self.root, 'meta.bin')
-        if not os.path.exists(self.meta_file):
+        self.meta_file = self.root / 'meta.bin'
+        if not self.meta_file.exists():
             print('Meta file does not exist.')
             self.meta = None
         else:
@@ -32,8 +33,8 @@ class ISMN_io(object):
             self.meta = pickle.load(f)
             f.close()
 
-        self.list_file = os.path.join(self.root, 'station_list.csv')
-        if not os.path.exists(self.list_file):
+        self.list_file = self.root / 'station_list.csv'
+        if not self.list_file.exists():
             print('Station list does not exist.')
         else:
             self.list = pd.read_csv(self.list_file, index_col=0)
@@ -146,9 +147,9 @@ class ISMN_io(object):
                 yield station, self.read(station.network, station.station, surf_depth=surf_depth)
 
 
-# if __name__=='__main__':
-#
-#     io = ISMN_io()
-#     io.generate_station_list()
-#
+if __name__=='__main__':
+
+    io = ISMN_io()
+    io.generate_station_list()
+
 

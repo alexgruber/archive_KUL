@@ -176,7 +176,7 @@ def calc_clim_p(ts, mode='pentadal', n=3):
     return clim
 
 
-def calc_pentadal_mean(Ser, n_min=20, return_n=False):
+def calc_pentadal_mean_std(Ser, n_min=20, return_n=False):
     """
     Calculates the mean seasonal cycle as long-term mean within a 45 days moving average window
     for each pentad (Faster than "calc_clim_moving_average" because output only per pentad)
@@ -206,7 +206,8 @@ def calc_pentadal_mean(Ser, n_min=20, return_n=False):
     Ser_pentad = np.floor((doys - 1) / 5.) + 1
 
     pentads = np.arange(73) + 1
-    clim = pd.Series(index=pentads)
+    clim_mean = pd.Series(index=pentads)
+    clim_std = pd.Series(index=pentads)
     n_data = pd.Series(index=pentads)
     for p in pentads:
         tmp_pentad = Ser_pentad.copy()
@@ -217,15 +218,17 @@ def calc_pentadal_mean(Ser, n_min=20, return_n=False):
         n_data[p] = len(xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)])
 
         if n_data[p] >= n_min:
-            clim[p] = xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.mean()
+            clim_mean[p] = xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.mean()
+            clim_std[p] = xSer[(tmp_pentad >= p - 4) & (tmp_pentad <= p + 4)].values.std()
 
-    # TODO: currently, time series is returned per pentand... the following can map it to 365 values.
+    # --- Time series are returned per pentad as needed for creating LDASSa scaling files!!
+    # --- The following can map it to 365 values
     # doys = np.arange(1, 366).astype('int')
     # ind = np.floor((doys - 1) / 5.).astype('int') + 1
     # clim365 = pd.Series(clim_fcst.loc[ind].values, index=doys)
 
     if return_n is False:
-        return clim
+        return clim_mean, clim_std
     else:
-        return clim, n_data
+        return clim_mean, clim_std, n_data
 
