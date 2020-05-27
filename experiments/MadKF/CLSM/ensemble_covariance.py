@@ -782,12 +782,14 @@ def plot_perturbations(root):
 
 if __name__=='__main__':
 
-    curr_it = 61
+    curr_it = 611
     anom_type='harmonic'      # 'harmonic' / 'moving_average' / ''
 
-    last_it = 531
-    mode = 'anomaly'          # 'absolute' / 'anomaly' / ''
-    sub = anom_type
+    last_it = 61
+    mode = ''
+    sub = ''
+    # mode = 'anomaly'          # 'absolute' / 'anomaly' / ''
+    # sub = anom_type           # --> only needed BEFORE it 61 to distinguish between cases.
 
     root = Path(f'~/Documents/work/MadKF/CLSM/iter_{curr_it}').expanduser()
 
@@ -799,11 +801,11 @@ if __name__=='__main__':
         Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
 
     calc_tb_mse(root, curr_it, anomaly=True, anom_type=anom_type)
-    # calc_ens_var(root, curr_it)
-    # calc_ens_cov(root, curr_it)
+    calc_ens_var(root, curr_it)
+    calc_ens_cov(root, curr_it)
     # smooth_parameters(root)
 
-    # correct_mse(root, last_it, mode=mode, sub=sub)
+    correct_mse(root, last_it, mode=mode, sub=sub)
     # plot_mse(root)
 
     # plot_ens_var(root)
@@ -813,7 +815,7 @@ if __name__=='__main__':
     # plot_P_R_check(curr_it, last_it)
     # plot_P_R_scl(curr_it, last_it)
 
-    # write_spatial_errors(root, curr_it)
+    write_spatial_errors(root, curr_it)
     plot_perturbations(root)
 
     # list(map(plot_perturbations, ('532', '533')))
