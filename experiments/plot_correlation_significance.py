@@ -30,7 +30,7 @@ def plot_R_p():
 
         for j, R in enumerate(Rs):
 
-            tt = (R * np.sqrt((df)/(1-R**2)))
+            tt = (R * np.sqrt(df/(1-R**2)))
 
             p[j,i] = 2 * (1 - t.cdf(tt, df))
 

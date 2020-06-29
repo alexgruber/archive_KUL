@@ -1,3 +1,6 @@
+import os
+os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -10,6 +13,8 @@ import xarray as xr
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+
+from pytesmo.temporal_matching import df_match
 
 from pyldas.grids import EASE2
 from pyldas.interface import LDAS_io
@@ -31,22 +36,60 @@ def calc_clim_p(ts, mode='pentadal', n=3):
         clim.index = np.arange(73)+1
         return clim
 
+def PCA(Ser1, Ser2, window=1):
 
-def run(sensor, date_from=None, date_to=None, mode='longterm'):
+    df1 = pd.DataFrame(Ser1).dropna(); df1.columns = ['ds1']
+    df2 = pd.DataFrame(Ser2).dropna(); df2.columns = ['ds2']
+
+    if (len(df1) < 10) | (len(df2) <= 10):
+        return pd.DataFrame(columns=['PC-1', 'PC-2'])
+
+    if len(df1) < len(df2):
+        matched = df_match(df1, df2, window=window)
+        df = df1.join(matched['ds2']).dropna()
+    else:
+        matched = df_match(df2, df1, window=window)
+        df = df2.join(matched['ds1']).dropna()
+
+    if len(df) < 10:
+        return pd.DataFrame(columns=['PC-1', 'PC-2'])
+
+    X = df.values.copy()
+    X_mean = X.mean(axis=0)
+    X -= X_mean
+
+    C = (X.T @ X) / (len(X)-1)
+    eigen_vals, eigen_vecs = np.linalg.eig(C)
+
+    # Rotate Eigenvectors 180 degrees if major PC is pointing in the "wrong" direction.
+    if (np.sign(eigen_vecs[:,np.argmax(eigen_vals)]).sum() == -2) & (np.sign(np.corrcoef(X.T)[0,1]) == 1):
+        eigen_vecs *= -1
+
+    X_pca = X @ eigen_vecs
+    if eigen_vals[0] < eigen_vals[1]:
+        X_pca = np.roll(X_pca, 1, axis=1)
+    X_pca[:,0] += X_mean.mean()
+
+    df_pca = pd.DataFrame(X_pca, columns=['PC-1', 'PC-2'], index=df.index)
+    return pd.concat((df, df_pca), axis='columns')
+
+def run(args, scale_target='SMAP', mode='longterm', use_pc=True):
     '''
-    :param sensor: 'SMOS' or 'SMAP' or 'SMOSSMAP'
-    :param date_from: 'yyyy-mm-dd'
-    :param date_to: 'yyyy-mm-dd'
+    :param args: summarizes the following three for multiprocessing purposes:
+        sensor: 'SMOS' or 'SMAP' or 'SMOSSMAP'
+        date_from: 'yyyy-mm-dd'
+        date_to: 'yyyy-mm-dd'
+    :param scale_target: 'SMOS' or 'SMAP'
     :param mode: 'longterm' or "shortterm'
+    :param use_pc: If true, the first principal component of SMOS/SMAP Tb will be used
     '''
+
+    sensor, date_from, date_to = args
 
     exp_smos = 'US_M36_SMOS40_TB_OL_noScl'
     exp_smap = 'US_M36_SMAP_TB_OL_noScl'
 
-    froot = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files/{sensor}')
-
-    if not froot.exists():
-        Path.mkdir(froot)
+    froot = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
 
     ios = []
     if 'SMOS' in sensor:
@@ -65,7 +108,8 @@ def run(sensor, date_from=None, date_to=None, mode='longterm'):
 
     pent_from = int(np.floor((date_from.dayofyear - 1) / 5.) + 1)
     pent_to = int(np.floor((date_to.dayofyear - 1) / 5.) + 1)
-    fbase = f'Thvf_TbSM_001_{sensor}_zscore_stats_{date_from.year}_p{pent_from:02}_{date_to.year}_p{pent_to:02}_hscale_0.00_W_9p_Nmin_20'
+    sub = '_PCA' if (use_pc and (sensor == 'SMOSSMAP')) else ''
+    fbase = f'Thvf_TbSM_001_src_{sensor}{sub}_trg_{scale_target}_{date_from.year}_p{pent_from:02}_{date_to.year}_p{pent_to:02}_W_9p_Nmin_20'
 
     dtype, _, _ = template_scaling(sensor='SMOS40')
 
@@ -112,19 +156,28 @@ def run(sensor, date_from=None, date_to=None, mode='longterm'):
         for pol in pols:
             for ang in angles:
                 for orb1, orb2 in zip(orbits[0], orbits[1]):
-
                     col, row = ios[0].grid.tileid2colrow(til)
                     if sensor.upper() == 'SMOSSMAP':
                         spcs = [io.get_species(pol=pol, ang=ang, orbit=orb) for io, orb in zip(ios,[orb1, orb2])]
-                        orb = orb2 # because they are used for SMAP rescaling!
+                        orb = orb2 if scale_target == 'SMAP' else orb1
                     else:
                         spcs = [ios[0].get_species(pol=pol, ang=ang, orbit=orb1)]
-                        orb = orb1 # If sensors are not combined, orb1 is always the correct one!
+                        if sensor.upper() == 'SMAP':
+                            orb = orb1 if scale_target == 'SMAP' else orb2
+                        else:
+                            orb = orb2 if scale_target == 'SMAP' else orb1
 
-                        # obs = io.timeseries['obs_obs'][:, spc-1, row, col].to_series()
-                        # mod = io.timeseries['obs_fcst'][:, spc-1, row, col].to_series()
-                    obs = pd.concat([io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
-                    mod = pd.concat([io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
+                    if use_pc and (sensor == 'SMOSSMAP'):
+                        dss = [io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
+                        obs = PCA(*dss, window=1.5)['PC-1']
+                        dss = [io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
+                        mod = PCA(*dss, window=1.5)['PC-1']
+                    else:
+                        obs = pd.concat([io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
+                        mod = pd.concat([io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
+
+                    if (len(obs) == 0) | (len(mod) == 0):
+                        continue
 
                     if mode == 'longterm':
                         data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
@@ -167,7 +220,7 @@ def run(sensor, date_from=None, date_to=None, mode='longterm'):
                 ios[0].write_fortran_block(fid, sdate)
                 ios[0].write_fortran_block(fid, edate)
                 ios[0].write_fortran_block(fid, lengths)
-                ios[0].write_fortran_block(fid, angles)
+                ios[0].write_fortran_block(fid, angles.astype('float')) # required by LDASsa!!
                 for f in res.columns.values:
                     ios[0].write_fortran_block(fid, res[f].values)
                 fid.close()
@@ -205,9 +258,22 @@ def replace_orbit_field():
         data[1] = 0
         data.tofile(f)
 
+def replace_angle_field():
+    '''
+    Angle needs to be stored as float.... This is to correct wrongly stored SMAP angle information
+    '''
+
+    root = Path('/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+
+    for fname in root.glob('*.bin'):
+        data = np.fromfile(fname, '>f4')
+        data[24] = 40.0
+        data.tofile(fname)
+
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    sensor = 'SMOSSMAP'
+    args = ('SMOSSMAP', '2015-04-01', '2020-04-01')
+    run(args)
 
-    run(sensor, date_from='2015-04-01', date_to='2019-12-31')
+    # replace_angle_field()

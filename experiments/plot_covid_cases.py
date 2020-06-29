@@ -189,14 +189,14 @@ def plot(yscale='log', countries=None):
 
     fontsize = 12
     markersize = 6
-    ylim_growth_cases = (0.95,1.25)
-    ylim_growth_deaths = (0.95,1.45)
+    ylim_growth_cases = (0.95,1.1)
+    ylim_growth_deaths = (0.95,1.05)
 
-    ylim_data_cases = (1e3, 3e6) if yscale == 'log' else (0, 300000)
-    ylim_data_deaths = (1e1, 2e5) if yscale == 'log' else (0, 40000)
+    ylim_data_cases = (1e3, 3e6) if yscale == 'log' else (0, 350000)
+    ylim_data_deaths = (1e1, 2e5) if yscale == 'log' else (0, 45000)
 
-    ylim_data_cases_norm = (3e2, 1e4) if yscale == 'log' else (0, 5500)
-    ylim_data_deaths_norm = (1e1, 2e3) if yscale == 'log' else (0, 600)
+    ylim_data_cases_norm = (3e2, 1e4) if yscale == 'log' else (0, 7000)
+    ylim_data_deaths_norm = (1e1, 2e3) if yscale == 'log' else (0, 700)
 
     # population density normalized
     # ylim_data_cases_norm = (1e3, 2e5) if yscale == 'log' else (-500, 100000)

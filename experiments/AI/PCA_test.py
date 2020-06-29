@@ -88,7 +88,7 @@ print(eigen_vals)
 
 print(np.allclose(np.square(sig) / (n - 1), eigen_vals))
 
-Alternative:
+# Alternative:
 from sklearn.decomposition import PCA
 pca = PCA(n_components=4)
 pca_result = pca.fit_transform(df[feat_cols].values)

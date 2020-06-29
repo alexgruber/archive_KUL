@@ -7,6 +7,8 @@ import pandas as pd
 
 from pathlib import Path
 
+from itertools import combinations
+
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,21 +19,35 @@ from pyldas.templates import template_scaling
 from pyldas.visualize.plots import plot_ease_img
 
 from pytesmo.temporal_matching import matching, df_match
+from myprojects.experiments.LDAS.scaling.create_scaling_parameters import PCA
 
-def create_climatology_ts(exp):
+def getcols():
+    return np.array(['OBS_H_A', 'MOD_H_A', 'OBS_V_A', 'MOD_V_A', 'OBS_H_D', 'MOD_H_D', 'OBS_V_D', 'MOD_V_D'])
 
-    dir_out = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/{exp}/scaling_files')
+def abbr2per(abbr):
+    return '2015-04-01_2020-04-01' if abbr.lower() == 'short' else '2010-01-01_2020-04-01'
 
-    root = Path(f'/Users/u0116961/data_sets/LDASsa_runs/{exp}/scaling_files')
-    fbase = str(list(root.glob('*.bin'))[0])[0:-10]
+def create_climatology_ts(experiment):
+
+    sensor, date = experiment[0], abbr2per(experiment[1])
+
+    root = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+    dir_out = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/scaling_files') / sensor / date
+
+    if not dir_out.exists():
+        Path.mkdir(dir_out, parents=True)
+
+    fbase = str(list(root.glob(f'*_{sensor}_trg*{date[0:4]}*{date[11:15]}*.bin'))[0].name)[0:-10]
 
     io = LDAS_io()
     idx = io.grid.tilecoord.tile_id.values
     dtype, hdr, length = template_scaling(sensor='SMOS40')
 
-    res = np.empty((9911, 73, 8))
-    # Third axis:
-    # ['OBS_A_H', 'OBS_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_A_H', 'MOD_A_V', 'MOD_D_H', 'MOD_D_V']
+    res = np.empty((9911, 73, 8, 2))
+
+    # Thrid axis: ['OBS_H_A', 'MOD_H_A', 'OBS_V_A', 'MOD_V_A', 'OBS_H_D', 'MOD_H_D', 'OBS_V_D', 'MOD_V_D']
+    # --> use getcols()
+    # Fourth axis: mean / stddev.
 
     for pent in range(1,74):
         for node in ['A','D']:
@@ -43,11 +59,16 @@ def create_climatology_ts(exp):
             tmp = io.read_fortran_binary(fname, dtype, hdr, length)
             tmp.index = tmp.tile_id
 
-            offs = 0 if node == 'A' else 2
-            res[:, pent-1, 0+offs] = tmp['m_obs_H_40'].reindex(idx)
-            res[:, pent-1, 1+offs] = tmp['m_obs_V_40'].reindex(idx)
-            res[:, pent-1, 4+offs] = tmp['m_mod_H_40'].reindex(idx)
-            res[:, pent-1, 5+offs] = tmp['m_mod_V_40'].reindex(idx)
+            offs = 0 if node == 'A' else 4
+            res[:, pent-1, 0+offs, 0] = tmp['m_obs_H_40'].reindex(idx)
+            res[:, pent-1, 1+offs, 0] = tmp['m_mod_H_40'].reindex(idx)
+            res[:, pent-1, 2+offs, 0] = tmp['m_obs_V_40'].reindex(idx)
+            res[:, pent-1, 3+offs, 0] = tmp['m_mod_V_40'].reindex(idx)
+
+            res[:, pent-1, 0+offs, 1] = tmp['s_obs_H_40'].reindex(idx)
+            res[:, pent-1, 1+offs, 1] = tmp['s_mod_H_40'].reindex(idx)
+            res[:, pent-1, 2+offs, 1] = tmp['s_obs_V_40'].reindex(idx)
+            res[:, pent-1, 3+offs, 1] = tmp['s_mod_V_40'].reindex(idx)
 
     np.place(res, res == -9999, np.nan)
 
@@ -55,87 +76,181 @@ def create_climatology_ts(exp):
 
     '''
     arr = np.load('/Users/u0116961/data_sets/LDASsa_runs/US_M36_SMOS40_TB_OL_noScl/scaling_files/climatologies.npy')
-    pd.DataFrame(arr[100,:,:], columns=['OBS_A_H', 'OBS_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_A_H', 'MOD_A_V', 'MOD_D_H', 'MOD_D_V']).plot()
+    cols = ['OBS_A_H', 'OBS_A_V', 'MOD_A_H', 'MOD_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_D_H', 'MOD_D_V']
+    pd.DataFrame(arr[100,:,:,0], columns=cols).plot()
     '''
 
+def calc_stats(experiments):
 
-def calc_stats(exp):
+    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/scaling_files')
+    fout = root / 'difference_stats.csv'
 
-    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
-    fout = root / exp / 'scaling_files' / 'difference_stats.csv'
+    ds = []
+    for (sens, abbr) in experiments:
+        data = np.load(root / sens / abbr2per(abbr) / 'climatologies.npy')
+        if sens == 'SMAP':
+            tmp_data = data.copy()
+            data[:,:,0,:], data[:,:,4,:] = tmp_data[:,:,4,:], tmp_data[:,:,0,:]
+            data[:,:,1,:], data[:,:,5,:] = tmp_data[:,:,5,:], tmp_data[:,:,1,:]
+            data[:,:,2,:], data[:,:,6,:] = tmp_data[:,:,6,:], tmp_data[:,:,2,:]
+            data[:,:,3,:], data[:,:,7,:] = tmp_data[:,:,7,:], tmp_data[:,:,3,:]
+        ds += [data]
 
-    ref = np.load(root / 'scaling_files' / 'climatologies.npy')
-    new = np.load(root / exp / 'scaling_files' / 'climatologies.npy')
+    cols = getcols()
 
-    if 'SMAP' in exp:
-        tmp_new = new.copy()
-        new[:,:,0], new[:,:,2] = tmp_new[:,:,2], tmp_new[:,:,0]
-        new[:,:,1], new[:,:,3] = tmp_new[:,:,3], tmp_new[:,:,1]
-        new[:,:,4], new[:,:,6] = tmp_new[:,:,6], tmp_new[:,:,4]
-        new[:,:,5], new[:,:,7] = tmp_new[:,:,7], tmp_new[:,:,5]
+    names = combinations(['_'.join(exp) for exp in experiments], 2)
+    dss = combinations(ds, 2)
 
-    cols = ['OBS_A_H', 'OBS_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_A_H', 'MOD_A_V', 'MOD_D_H', 'MOD_D_V']
+    for ((exp1, exp2), (ds1, ds2)) in zip(names, dss):
+        print(f'{exp1}, {exp2}')
+        res_cols = [f'{var}_{metric}_{col}_{exp1}_{exp2}' for var in ['mean', 'std'] for metric in ['bias','mae','corr'] for col in cols]
+        res = pd.DataFrame(columns=res_cols, index=range(1,9912))
 
-    res_cols = ['bias_' + col for col in cols] + ['corr_' + col for col in cols]
+        for i_v, var in enumerate(['mean','std']):
+            for i_c, col in enumerate(cols):
+                res[f'{var}_bias_{col}_{exp1}_{exp2}'] = np.nanmean(ds1[:, :, i_c, i_v] - ds2[:, :, i_c, i_v],axis=1)
+                res[f'{var}_mae_{col}_{exp1}_{exp2}'] = np.nanmean(np.abs(ds1[:, :, i_c, i_v] - ds2[:, :, i_c, i_v]),axis=1)
+                res[f'{var}_corr_{col}_{exp1}_{exp2}'] = np.diag(pd.DataFrame(np.vstack((ds1[:, :, i_c, i_v], ds2[:, :, i_c, i_v])).T).corr().loc[range(0,9911),range(9911,2*9911)])
 
-    res = pd.DataFrame(columns=res_cols, index=range(1,9912))
+        res.to_csv(fout, float_format='%.4f')
 
-    for idx, col in enumerate(cols):
-        print(col)
-        # res['bias_' + col] = np.nanmean(new[:, :, idx],axis=1) - np.nanmean(ref[:, :, idx],axis=1)
-        res['bias_' + col] = np.nanmean(new[:, :, idx] - ref[:, :, idx],axis=1)
-        res['corr_' + col] = np.diag(pd.DataFrame(np.vstack((ref[:, :, idx], new[:, :, idx])).T).corr().loc[range(0,9911),range(9911,2*9911)])
+def plot_climatology_ts(experiments):
 
-    res.to_csv(fout, float_format='%.4f')
+    # lat, lon = 41.509352, -110.254093 # Wyoming (high bias)
+    # lat, lon = 32.300219, -107.117220 # New Mexico (low corr)
+    lat, lon = 48.206665, -100.257308 # North Dacota (good)
 
-def plot_climatology_ts(exp):
+    tile = LDAS_io().grid.lonlat2tilenum(lon, lat)
 
-    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
-    arr = np.load(root / exp / 'scaling_files' / 'climatologies.npy')
-    cols = ['OBS_A_H', 'OBS_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_A_H', 'MOD_A_V', 'MOD_D_H', 'MOD_D_V']
-    res = pd.DataFrame(arr[100,:,:], columns=cols)
+    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/scaling_files')
 
-    res.plot(figsize=(14,6), xlim=(-2,75), ylim=(240,300), fontsize=12)
-    plt.title('SMAP: 2015 - 2020', fontsize=14)
-    plt.gcf().savefig(root / exp / 'scaling_files' / 'plot_ts.png', dpi=150, bbox_inches='tight')
+    cols = getcols()
+    names = ['_'.join(exp) for exp in experiments]
+    dss = []
+    for (sens, abbr) in experiments:
+        data = np.load(root / sens / abbr2per(abbr) / 'climatologies.npy')
+        dss += [data]
+
+    fontsize=10
+    plt.figure(figsize=(18,10))
+    colors = ['orange','b','r','g','grey','magenta']
+
+    for n, node in enumerate(['A','D']):
+        for s, src in enumerate(['OBS','MOD']):
+
+            idx1 = np.where(cols == f'{src}_V_{node}')[0][0]
+            idx2 = np.where(cols == f'{src}_H_{node}')[0][0]
+
+            for p, param in enumerate(['Mean', 'Std.dev']):
+
+                ax = plt.subplot(4,2, (p+1) + 2*s + 4*n)
+                res_v = pd.DataFrame(index=range(73))
+                res_h = pd.DataFrame(index=range(73))
+                for ds, name in zip(dss, names):
+                    res_v[name] = ds[tile, :, idx1, p]
+                    res_h[name] = ds[tile, :, idx2, p]
+
+                res_v.plot(ax=ax, xlim=(-2,75), fontsize=fontsize, style='-', color=colors, legend=True if n+s+p == 0 else False)
+                res_h.plot(ax=ax, xlim=(-2,75), fontsize=fontsize, style='--', color=colors, legend=False)
+                plt.title(f'{param} / {src}. / {node}sc.     - V-pol / -- H-pol', fontsize=fontsize)
+
+                if 2*s + 4*n != 6:
+                    ax.set_xticks([])
+                else:
+                    plt.xlabel('pentad', fontsize=fontsize)
+
+
+    plt.gcf().savefig(root / f'clim_ts_{tile}.png', dpi=300, bbox_inches='tight')
     plt.close()
-
+    # plt.tight_layout()
+    # plt.show()
 
 def plot_Tb_ts():
-
-    root = Path('/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
-
-    io_smos = LDAS_io('ObsFcstAna', exp='US_M36_SMOS40_TB_OL_noScl')
-    io_smap = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl')
-
-    stats = np.load(root / 'TB_stats_lon_lat_bias_corr.npy')
 
     lat, lon = 41.509352, -110.254093 # Wyoming (high bias)
     # lat, lon = 32.300219, -107.117220 # New Mexico (low corr)
     # lat, lon = 48.206665, -100.257308 # North Dacota (good)
 
+    root = Path('/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
+
+    io_smos = LDAS_io('ObsFcstAna', exp='US_M36_SMOS40_TB_OL_noScl')
+    io_smap = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl')
+    # stats = np.load(root / 'TB_stats_lon_lat_bias_corr.npy')
+
     idx_lon, idx_lat = io_smos.grid.lonlat2colrow(lon, lat, domain=True)
 
-    ts_smos = io_smos.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-01-03':'2020-01-01']
-    ts_smap = io_smap.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-01-03':'2020-01-01']
+    ts_smos = io_smos.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-04-01':'2020-04-01']
+    ts_smap = io_smap.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-04-01':'2020-04-01']
 
     plt.figure(figsize=(18,11))
+    fontsize=12
 
     for i, (spc_smos, spc_smap) in enumerate(zip([1, 2, 3, 4], [2, 1, 4, 3])):
 
-        tmp_smos = ts_smos[spc_smos].dropna(); tmp_smos.name = 'SMOS'
-        tmp_smap = ts_smap[spc_smap].dropna(); tmp_smap.name = 'SMAP'
-        if len(tmp_smos) < len(tmp_smap):
-            df = matching(tmp_smos, tmp_smap, window=1)
-        else:
-            df = matching(tmp_smap, tmp_smos, window=1)
+        ts_pca = PCA(ts_smos[spc_smos], ts_smap[spc_smap], window=1.5)['PC-1']
+
+        df = pd.concat((ts_smos[spc_smos], ts_smap[spc_smap], ts_pca), axis=1)
+        df.columns = ['SMOS', 'SMAP', 'PC-1']
 
         plt.subplot(4,1,i+1)
-        df.plot(xlim=('2015-01-01','2020-01-01'), fontsize=12, ax=plt.gca(), legend=(False if i != 0 else True))
+        df.interpolate('linear').plot(fontsize=fontsize, ax=plt.gca(), legend=(False if i != 0 else True))
         plt.xlabel('')
-        plt.title(f'Bias: {stats[i+2, idx_lat, idx_lon]:.2f} , Correlation: {stats[i+6, idx_lat, idx_lon]:.2f}', fontsize=12)
+        # plt.title(f'Bias: {stats[i+2, idx_lat, idx_lon]:.2f} , Correlation: {stats[i+6, idx_lat, idx_lon]:.2f}', fontsize=fontsize)
         if i != 3:
             plt.gca().set_xticks([])
+
+    # plt.gcf().savefig(root / f'Tb_ts_{idx_lat}_{idx_lon}.png', dpi=300, bbox_inches='tight')
+    # plt.close()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_Tb_clim_years_ts():
+
+    src = 'obs'
+
+    lat, lon = 41.509352, -110.254093 # Wyoming (high bias)
+    # lat, lon = 32.300219, -107.117220 # New Mexico (low corr)
+    # lat, lon = 48.206665, -100.257308 # North Dacota (good)
+
+    root = Path('/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
+
+    io_smos = LDAS_io('ObsFcstAna', exp='US_M36_SMOS40_TB_OL_noScl')
+    io_smap = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl')
+    # stats = np.load(root / 'TB_stats_lon_lat_bias_corr.npy')
+
+    idx_lon, idx_lat = io_smos.grid.lonlat2colrow(lon, lat, domain=True)
+
+    ts_smos = io_smos.timeseries[f'obs_{src}'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-04-01':'2020-04-01']
+    ts_smap = io_smap.timeseries[f'obs_{src}'].isel(lat=idx_lat, lon=idx_lon).to_pandas()['2015-04-01':'2020-04-01']
+
+    plt.figure(figsize=(18,11))
+    fontsize=12
+
+    # for i, (spc_smos, spc_smap) in enumerate(zip([1, 2, 3, 4], [2, 1, 4, 3])):
+
+    i=0
+    spc_smos = 1
+    spc_smap = 2
+
+    ts_pca = PCA(ts_smos[spc_smos], ts_smap[spc_smap], window=1.5)['PC-1']
+
+    df = pd.concat((ts_smos[spc_smos], ts_smap[spc_smap], ts_pca), axis=1)
+    df.columns = ['SMOS', 'SMAP', 'PC-1']
+
+    if i != 3:
+        plt.gca().set_xticks([])
+    for j, sens in enumerate(df.columns.values):
+        plt.subplot(3,1,j+1)
+        for yr in range(2015,2021):
+            tmp_df = df[df.index.year==yr][sens]
+            tmp_df.index = tmp_df.index.dayofyear
+            tmp_df.interpolate('linear').plot(fontsize=fontsize, ax=plt.gca(), legend=False, linewidth=1)
+        plt.xlabel('')
+
+
+            # plt.title(f'Bias: {stats[i+2, idx_lat, idx_lon]:.2f} , Correlation: {stats[i+6, idx_lat, idx_lon]:.2f}', fontsize=fontsize)
 
     # plt.gcf().savefig(root / f'Tb_ts_{idx_lat}_{idx_lon}.png', dpi=300, bbox_inches='tight')
     # plt.close()
@@ -267,7 +382,7 @@ def plot_stats(exp):
     root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling')
     res = pd.read_csv(root / exp / 'scaling_files' / 'difference_stats.csv', index_col=0)
 
-    cols = ['OBS_A_H', 'OBS_A_V', 'OBS_D_H', 'OBS_D_V', 'MOD_A_H', 'MOD_A_V', 'MOD_D_H', 'MOD_D_V']
+    cols = getcols()
 
     # for param in ['bias', 'corr']:
     for param in ['bias', ]:
@@ -286,12 +401,26 @@ def plot_stats(exp):
 
 if __name__ == '__main__':
 
-    # exp = 'US_M36_SMOS40_TB_OL_noScl'
-    # create_climatology_ts(exp)
-    # calc_stats(exp)
+    experiments = [['SMOSSMAP_PCA', 'short'],
+                   ['SMOSSMAP', 'long'],
+                   ['SMOSSMAP', 'short'],
+                   ['SMOS', 'long'],
+                   ['SMOS', 'short'],
+                   ['SMAP', 'short']]
+
+    # experiment = ['SMOSSMAP_PCA', 'short']
+
+    # create_climatology_ts(experiment)
+    # plot_climatology_ts(experiments)
+
+    # plot_Tb_ts()
+    plot_Tb_clim_years_ts()
+
+    # calc_stats(experiments)
+
     # plot_stats(exp)
 
     # calc_Tb_stats()
-    plot_Tb_ts()
+    # plot_Tb_ts()
     # plot_tb_stats_map()
     # plot_tb_stats_violins()
