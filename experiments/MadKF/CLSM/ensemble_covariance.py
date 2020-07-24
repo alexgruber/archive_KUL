@@ -607,8 +607,8 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
     fname = root / 'result_files'/ sub / 'ens_var.csv'
     ensvar = pd.read_csv(fname, index_col=0)
 
-    # fname = root / 'result_files'/ sub / 'mse_corrected.csv'
-    fname = root / 'result_files'/ sub / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
+    fname = root / 'result_files'/ sub / 'mse_corrected.csv'
+    # fname = root / 'result_files'/ sub / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
     mse = pd.read_csv(fname, index_col=0)
 
     obs_err = ensvar[['col','row']]
@@ -618,7 +618,7 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
     for spc in np.arange(1,5):
         obs_err.loc[:,'obs_var_spc%i'%spc] = ensvar['fcst_var_spc%i'%spc] * mse['mse_obs_spc%i'%spc] / mse['mse_fcst_spc%i'%spc]
         obs_err.loc[(obs_err['obs_var_spc%i' % spc] < 1), 'obs_var_spc%i' % spc] = 1
-        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 500), 'obs_var_spc%i' % spc] = 500
+        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 1000), 'obs_var_spc%i' % spc] = 1000
         # obs_err.loc[np.isnan(obs_err['obs_var_spc%i'%spc]),'obs_var_spc%i'%spc] = obs_err['obs_var_spc%i'%spc].median()
         obs_err.loc[:, 'obs_var_spc%i' % spc] **= 0.5
 
@@ -761,7 +761,7 @@ def plot_perturbations(root):
     imgA.index += 1
     imgD.index += 1
 
-    cbrange = [0,20]
+    cbrange = [0,1000**0.5]
 
     plt.figure(figsize=(20, 10))
 
@@ -782,30 +782,31 @@ def plot_perturbations(root):
 
 if __name__=='__main__':
 
-    curr_it = 611
-    anom_type='harmonic'      # 'harmonic' / 'moving_average' / ''
+    curr_it = 11
+    anomaly = True
+    anom_type = 'moving_average'      # 'harmonic' / 'moving_average' / ''
 
-    last_it = 61
+    last_it = 611
     mode = ''
     sub = ''
     # mode = 'anomaly'          # 'absolute' / 'anomaly' / ''
     # sub = anom_type           # --> only needed BEFORE it 61 to distinguish between cases.
 
-    root = Path(f'~/Documents/work/MadKF/CLSM/iter_{curr_it}').expanduser()
+    root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
 
     if not (root / 'result_files').exists():
         Path.mkdir(root / 'result_files', parents=True)
-    if not (root / 'plots' / 'smoothed').exists():
-        Path.mkdir(root / 'plots'/ 'smoothed', parents=True)
-    if not (root / 'error_files' / 'smoothed').exists():
-        Path.mkdir(root / 'error_files' / 'smoothed', parents=True)
+    if not (root / 'plots' ).exists():
+        Path.mkdir(root / 'plots', parents=True)
+    if not (root / 'error_files' ).exists():
+        Path.mkdir(root / 'error_files' , parents=True)
 
     calc_tb_mse(root, curr_it, anomaly=True, anom_type=anom_type)
-    calc_ens_var(root, curr_it)
-    calc_ens_cov(root, curr_it)
+    # calc_ens_var(root, curr_it)
+    # calc_ens_cov(root, curr_it)
     # smooth_parameters(root)
 
-    correct_mse(root, last_it, mode=mode, sub=sub)
+    # correct_mse(root, last_it, mode=mode, sub=sub)
     # plot_mse(root)
 
     # plot_ens_var(root)
@@ -815,8 +816,8 @@ if __name__=='__main__':
     # plot_P_R_check(curr_it, last_it)
     # plot_P_R_scl(curr_it, last_it)
 
-    write_spatial_errors(root, curr_it)
-    plot_perturbations(root)
+    # write_spatial_errors(root, curr_it)
+    # plot_perturbations(root)
 
     # list(map(plot_perturbations, ('532', '533')))
 
