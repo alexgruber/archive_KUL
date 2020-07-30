@@ -134,9 +134,11 @@ class ISMN_io(object):
             except:
                 continue
 
-        return pd.DataFrame({'sm_surface':pd.DataFrame(surf).mean(axis=1),
+        df = pd.DataFrame({'sm_surface':pd.DataFrame(surf).mean(axis=1),
                              'sm_rootzone':pd.DataFrame(root).mean(axis=1),
                              'sm_profile':pd.DataFrame(prof).mean(axis=1)})
+        df.index = pd.DatetimeIndex(df.index).tz_localize(None)
+        return df
 
     def iter_stations(self, surf_depth=0.1, surface_only=True):
 

@@ -4,6 +4,15 @@ import pandas as pd
 
 import logging
 
+from pytesmo.time_series.anomaly import calc_climatology
+from pytesmo.time_series.anomaly import calc_anomaly as calc_anom_pytesmo
+
+def calc_anom(Ser, longterm=False, window_size=35):
+
+    anom = calc_anom_pytesmo(Ser, climatology=calc_climatology(Ser) if longterm else None, window_size=window_size)
+    anom.name = Ser.name
+
+    return anom
 
 def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False, window_size=35):
 

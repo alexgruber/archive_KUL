@@ -1,10 +1,10 @@
 
 import os
-import pathlib
 
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
 from netCDF4 import Dataset, date2num, num2date
 
 from osgeo import osr
@@ -13,15 +13,12 @@ from osgeo import gdal
 import rasterio
 import shapefile
 import matplotlib.pyplot as plt
-from matplotlib.path import Path
-from matplotlib.patches import PathPatch
-from mpl_toolkits.basemap import Basemap
 
 from myprojects.readers.ascat import HSAF_io
 
 def create_mask():
 
-    root = pathlib.Path('/data_sets/LIS/NoahMP_belgium/')
+    root = Path('/data_sets/LIS/NoahMP_belgium/')
     tmp_fname = root / 'tmp_mask.tif'
 
     shp_bel = '/data_sets/LIS/shapefiles/BEL_adm/BEL_adm0.shp'
@@ -61,8 +58,6 @@ def create_mask():
     gdal.Warp(str(fname_our), str(tmp_fname), dstNodata=0, cutlineDSName=str(shp_our))
 
     tmp_fname.unlink()
-
-
 
 def reformat_ascat():
 
@@ -140,22 +135,33 @@ def reformat_ascat():
                     print('gpi %i failed' % gpi)
                     continue
 
-    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,1 --cnk_dmn lat,%i --cnk_dmn lon,%i ' % (lats.shape)
+    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,1 --cnk_dmn lat,%i --cnk_dmn lon,%i ' % lats.shape
     cmd = ' '.join([cmdBase, outfile_ts, outfile_img])
     os.system(cmd)
 
 
+def reformat_lis_files(root, date_from=None, date_to=None):
 
-def reformat_lis_files():
+    root = Path(root)
 
-    path = pathlib.Path('/data_sets/LIS/NoahMP_belgium/exp1_OL/OUT_OL_Belgium/SURFACEMODEL')
-    outfile_img = path / 'images.nc'
-    outfile_ts = path / 'timeseries.nc'
+    outfile_img = root / 'images.nc'
+    outfile_ts = root / 'timeseries.nc'
 
-    files = sorted(path.glob('**/*.d01.nc'))
+    files = np.array(sorted(root.glob('**/*.d01.nc')))
+    pydates = pd.to_datetime([f.name[-19:-7] for f in files], format='%Y%m%d%H%M')
 
-    timeunit = 'hours since 2000-01-01 00:00'
-    dates = date2num(pd.to_datetime([f.name[-19:-7] for f in files], format='%Y%m%d%H%M').to_pydatetime(), timeunit).astype('int32')
+    if date_from:
+        files = files[pydates >= date_from]
+        pydates = pydates[pydates >= date_from]
+    if date_to:
+        files = files[pydates <= date_to]
+        pydates = pydates[pydates <= date_to]
+    if len(files) == 0:
+        print('No files found.')
+        return
+
+    timeunit = 'hours since 1980-01-01 00:00'
+    dates = date2num(pydates.to_pydatetime(), timeunit).astype('int32')
 
     with Dataset(outfile_img, mode='w') as res:
 
@@ -165,33 +171,49 @@ def reformat_lis_files():
             with Dataset(file) as ds:
 
                 if i == 0:
+                    res.createDimension('time', len(dates))
+                    res.createDimension('layer', 4)
                     res.createDimension('lat', ds['lat'].shape[0])
                     res.createDimension('lon', ds['lon'].shape[1])
-                    res.createDimension('time', len(dates))
 
+                    res.createVariable('time', dates.dtype, dimensions=('time',), chunksizes=(1,), zlib=True)
+                    res.createVariable('layer', dates.dtype, dimensions=('layer',), chunksizes=(1,), zlib=True)
                     res.createVariable('lat', ds['lat'].dtype, dimensions=('lat','lon'), chunksizes=ds['lat'].shape, zlib=True)
                     res.createVariable('lon', ds['lon'].dtype, dimensions=('lat','lon'), chunksizes=ds['lon'].shape, zlib=True)
-                    res.createVariable('time', dates.dtype, dimensions=('time',), chunksizes=(1,), zlib=True)
+                    res.variables['time'][:] = dates
+                    res.variables['layer'][:] = np.arange(1,5)
                     res.variables['lat'][:,:] = ds['lat'][:,:]
                     res.variables['lon'][:,:] = ds['lon'][:,:]
-                    res.variables['time'][:] = dates
 
                     # Coordinate attributes following CF-conventions
                     res.variables['time'].setncatts({'long_name': 'time', 'units': timeunit})
-                    res.variables['lon'].setncatts({'long_name': 'longitude', 'units':'degrees_east'})
+                    res.variables['layer'].setncatts({'long_name': 'Soil Layer', 'units':'-'})
                     res.variables['lat'].setncatts({'long_name': 'latitude', 'units':'degrees_north'})
+                    res.variables['lon'].setncatts({'long_name': 'longitude', 'units':'degrees_east'})
 
-                    res.createVariable('SoilMoisture', 'float32',
+                    res.createVariable('SM', 'float32',
+                                       dimensions=('time', 'layer', 'lat', 'lon'), chunksizes=(1, 1) + ds['lat'].shape, zlib=True)
+                    res.createVariable('ST', 'float32',
+                                       dimensions=('time', 'layer', 'lat', 'lon'), chunksizes=(1, 1) + ds['lat'].shape, zlib=True)
+                    res.createVariable('SWE', 'float32',
+                                       dimensions=('time', 'lat', 'lon'), chunksizes=(1,) + ds['lat'].shape, zlib=True)
+                    res.createVariable('LAI', 'float32',
                                        dimensions=('time', 'lat', 'lon'), chunksizes=(1,) + ds['lat'].shape, zlib=True)
 
-                res.variables['SoilMoisture'][i, :, :] = ds['SoilMoist_inst'][0,:,:]
+                res.variables['SM'][i, :, :, :] = ds['SoilMoist_inst'][:,:,:]
+                res.variables['ST'][i, :, :, :] = ds['SoilTemp_inst'][:,:,:]
+                res.variables['SWE'][i, :, :] = ds['SWE_inst'][:,:]
+                res.variables['LAI'][i, :, :] = ds['LAI_inst'][:,:]
 
     cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
     cmd = ' '.join([cmdBase, str(outfile_img), str(outfile_ts)])
     os.system(cmd)
 
 
-if __name__=='__main__':
-    # reformat_ascat()
-    create_mask()
+# if __name__=='__main__':
 
+    # reformat_ascat()
+    # create_mask()
+
+    # root = '/scratch/leuven/320/vsc32046/output/LIS/noahmp36_spinup/025/SURFACEMODEL'
+    # reformat_lis_files(root, date_from='2007-01-01', date_to='2020-01-01')

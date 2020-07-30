@@ -79,10 +79,10 @@ def plot_scaling_parameters():
 
 def plot_Tb_clims():
 
-    ts = LDAS_io('ObsFcstAna', exp='US_M36_SMOS_noDA_unscaled').timeseries
+    ts = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl').timeseries
     data = pd.DataFrame(index=ts.time.values)
-    data['obs'] = pd.to_numeric(ts['obs_obs'][8,45,30].values,errors='coerce')
-    data['fcst'] = pd.to_numeric(ts['obs_fcst'][8,45,30].values,errors='coerce')
+    data['obs'] = pd.to_numeric(ts['obs_obs'][:,0,45,30].values,errors='coerce')
+    data['fcst'] = pd.to_numeric(ts['obs_fcst'][:,0,45,30].values,errors='coerce')
 
     data_plt = data.copy().resample('1d').first()
     data_plt.interpolate(inplace=True)
@@ -106,7 +106,7 @@ def plot_Tb_clims():
     clim['moving_average'] = calc_clim_moving_average(arr,window_size=45)
     clim.plot(linewidth=2,ax=ax)
     ax.set_xlim((0,365))
-    ax.set_ylim((180,285))
+    ax.set_ylim((200,295))
     ax.legend(loc=2)
 
     ax = plt.subplot(gs[0])
@@ -140,7 +140,7 @@ def plot_Tb_clims():
     clim['moving_average'] = calc_clim_moving_average(arr,window_size=45)
     clim.plot(linewidth=2,ax=ax)
     ax.set_xlim((0,365))
-    ax.set_ylim((190,250))
+    ax.set_ylim((220,300))
     ax.legend(loc=2)
 
     ax = plt.subplot(gs[2])

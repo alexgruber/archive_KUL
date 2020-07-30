@@ -343,10 +343,12 @@ def plot_ismn_statistics_v2():
 
 def plot_ismn_statistics_v3(root):
 
-    res = pd.read_csv(root / 'insitu_TCA.csv')
+    res = pd.read_csv(root / 'insitu_TCA.csv', index_col=0)
     res.index = res.network
-    res2 = pd.read_csv(root / 'insitu.csv')
+    res.drop('network', axis='columns', inplace=True)
+    res2 = pd.read_csv(root / 'insitu.csv', index_col=0)
     res2.index = res2.network
+    res2.drop('network', axis='columns', inplace=True)
 
     variables = ['sm_surface', 'sm_rootzone']
     var_labels = ['surface', 'root-zone']
@@ -357,10 +359,10 @@ def plot_ismn_statistics_v3(root):
     cols = ['lightblue', 'lightgreen', 'coral']
     fontsize = 16
 
-    networks  = ['SCAN', 'USCRN']
-    title = ', '.join(networks)
-    res = res.loc[networks,:]
-    res2 = res2.loc[networks,:]
+    # networks  = ['SCAN', 'USCRN']
+    # title = ', '.join(networks)
+    # res = res.loc[res.index.isin(networks),:]
+    # res2 = res2.loc[res2.index.isin(networks),:]
 
     f = plt.figure(figsize=(14,8))
 
@@ -511,7 +513,7 @@ def plot_improvement_vs_uncertainty_update(iteration):
 
 if __name__=='__main__':
 
-    iteration = 62
+    iteration = 612
     root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
 
     if not (root / 'plots').exists():

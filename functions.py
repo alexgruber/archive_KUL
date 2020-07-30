@@ -4,12 +4,12 @@ import pandas as pd
 
 from pathlib import Path
 
-def merge_files(path, delete=False, precision='%0.4f'):
+def merge_files(path, pattern='*.csv', fname='result.csv', delete=False, precision='%0.4f'):
 
     path = Path(path)
 
-    files = path.glob('**/*.csv')
-    fname = path / 'result.csv'
+    files = list(path.glob(f'**/{pattern}'))
+    fname = path / fname
 
     result = pd.DataFrame()
     for f in files:

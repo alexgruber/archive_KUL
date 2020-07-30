@@ -71,9 +71,9 @@ def PCA(Ser1, Ser2, window=1):
     X_pca[:,0] += X_mean.mean()
 
     df_pca = pd.DataFrame(X_pca, columns=['PC-1', 'PC-2'], index=df.index)
-    return pd.concat((df, df_pca), axis='columns')
+    return pd.concat((df, df_pca), axis='columns'), eigen_vals, eigen_vecs
 
-def run(args, scale_target='SMAP', mode='longterm', use_pc=True):
+def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     '''
     :param args: summarizes the following three for multiprocessing purposes:
         sensor: 'SMOS' or 'SMAP' or 'SMOSSMAP'
@@ -90,6 +90,8 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=True):
     exp_smap = 'US_M36_SMAP_TB_OL_noScl'
 
     froot = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+    if not froot.exists():
+        Path.mkdir(froot, parents=True)
 
     ios = []
     if 'SMOS' in sensor:
@@ -273,7 +275,7 @@ def replace_angle_field():
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    args = ('SMOSSMAP', '2015-04-01', '2020-04-01')
+    args = ('SMAP', '2015-04-01', '2020-04-01')
     run(args)
 
     # replace_angle_field()

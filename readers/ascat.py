@@ -14,7 +14,7 @@ from pyldas.interface import LDAS_io
 
 class HSAF_io(object):
 
-    def __init__(self, root=None, version='h113', ext='h114'):
+    def __init__(self, root=None, version='h115', ext='h116'):
 
         if root is None:
             if platform.system() == 'Linux':

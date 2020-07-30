@@ -18,7 +18,7 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from scipy.ndimage import gaussian_filter
 
-from myprojects.timeseries import calc_anomaly
+from myprojects.timeseries import calc_anom
 
 def tca(df):
     cov = df.dropna().cov().values
@@ -28,10 +28,13 @@ def tca(df):
     return err_var
 
 
-def calc_tb_mse(root, iteration, anomaly=True, anom_type='harmonic'):
+def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
-    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
-    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+    # exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
+    # exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+
+    exp_ol = 'US_M36_SMAP_TB_OL_noScl'
+    exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
 
     param = 'ObsFcstAna'
 
@@ -60,9 +63,9 @@ def calc_tb_mse(root, iteration, anomaly=True, anom_type='harmonic'):
             ts_fcst = ts_fcst.reindex(ts_ana.index)
 
             if anomaly is True:
-                ts_fcst = calc_anomaly(ts_fcst, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
-                ts_obs = calc_anomaly(ts_obs, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
-                ts_ana = calc_anomaly(ts_ana, method=anom_type, output='anomaly', longterm=False, window_size=45).dropna()
+                ts_fcst = calc_anom(ts_fcst, longterm=longterm, window_size=45).dropna()
+                ts_obs = calc_anom(ts_obs, longterm=longterm, window_size=45).dropna()
+                ts_ana = calc_anom(ts_ana, longterm=longterm, window_size=45).dropna()
 
             df = pd.concat((ts_obs,ts_fcst,ts_ana),axis=1).dropna()
             tc_res = tca(df)
@@ -77,11 +80,14 @@ def calc_tb_mse(root, iteration, anomaly=True, anom_type='harmonic'):
 
 def calc_ens_var(root, iteration):
 
-    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
-    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+    exp_ol = 'US_M36_SMAP_TB_OL_noScl'
+    exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
 
-    param = 'ObsFcstAnaEns'
-    # param = 'ObsFcstAna'
+    # exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
+    # exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+
+    # param = 'ObsFcstAnaEns'
+    param = 'ObsFcstAna'
 
     io_ol = LDAS_io(param, exp_ol)
     io_da = LDAS_io(param, exp_da)
@@ -100,21 +106,20 @@ def calc_ens_var(root, iteration):
         col, row = io_ol.grid.tileid2colrow(val.tile_id)
 
         for spc in [1, 2, 3, 4]:
-            ts_fcst = io_ol.read_ts('obs_fcst', col, row, species=spc, lonlat=False).dropna()
-            ts_obs = io_da.read_ts('obs_obs', col, row, species=spc, lonlat=False).dropna()
-            ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
-            if len(ts_ana) == 0:
-                continue
-            ts_fcst = ts_fcst.reindex(ts_ana.index)
-            ts_obs = ts_obs.reindex(ts_ana.index)
+            # ts_fcst = io_ol.read_ts('obs_fcst', col, row, species=spc, lonlat=False).dropna()
+            # ts_obs = io_da.read_ts('obs_obs', col, row, species=spc, lonlat=False).dropna()
+            # ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
+            # if len(ts_ana) == 0:
+            #     continue
+            # ts_fcst = ts_fcst.reindex(ts_ana.index)
+            # ts_obs = ts_obs.reindex(ts_ana.index)
+            # res.loc[idx,f'obs_var_spc{spc}'] = ts_obs.var(axis='columns').mean()
+            # res.loc[idx,f'fcst_var_spc{spc}'] = ts_fcst.var(axis='columns').mean()
+            # res.loc[idx,f'ana_var_spc{spc}'] = ts_ana.var(axis='columns').mean()
 
-            res.loc[idx,f'obs_var_spc{spc}'] = ts_obs.var(axis='columns').mean()
-            res.loc[idx,f'fcst_var_spc{spc}'] = ts_fcst.var(axis='columns').mean()
-            res.loc[idx,f'ana_var_spc{spc}'] = ts_ana.var(axis='columns').mean()
-
-            # res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
-            # res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
-            # res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
+            res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
+            res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
+            res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
 
     fname = root / 'result_files' / 'ens_var.csv'
 
@@ -593,44 +598,32 @@ def fill_gaps(xres, tags, smooth=False):
 
 def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
 
-    # TODO: ALTERNATIVE OPTION: USE ALREADY SMOOTHED INPUT
-    # sub = 'gapfilled' if gapfilled else ''
-    sub = ''
-
-    froot = root / 'error_files' / sub
+    froot = root / 'error_files'
     fbase = 'SMOS_fit_Tb_'
 
-    # exp = 'US_M36_SMOS40_TB_MadKF_it%i' % iteration
-    exp = 'US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration
+    exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    # exp = 'US_M36_SMAP_TB_MadKF_DA_it%i' % iteration
     io = LDAS_io('ObsFcstAna', exp)
 
-    fname = root / 'result_files'/ sub / 'ens_var.csv'
+    fname = root / 'result_files' / 'ens_var.csv'
     ensvar = pd.read_csv(fname, index_col=0)
 
-    fname = root / 'result_files'/ sub / 'mse_corrected.csv'
-    # fname = root / 'result_files'/ sub / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
+    # fname = root / 'result_files' / 'mse_corrected.csv'
+    fname = root / 'result_files' / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
     mse = pd.read_csv(fname, index_col=0)
 
     obs_err = ensvar[['col','row']]
     obs_err.loc[:, 'tile_id'] = io.grid.tilecoord.loc[obs_err.index, 'tile_id'].values
 
-    # plt.figure(figsize=(14, 8))
     for spc in np.arange(1,5):
         obs_err.loc[:,'obs_var_spc%i'%spc] = ensvar['fcst_var_spc%i'%spc] * mse['mse_obs_spc%i'%spc] / mse['mse_fcst_spc%i'%spc]
         obs_err.loc[(obs_err['obs_var_spc%i' % spc] < 1), 'obs_var_spc%i' % spc] = 1
-        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 1000), 'obs_var_spc%i' % spc] = 1000
+        obs_err.loc[(obs_err['obs_var_spc%i' % spc] > 1600), 'obs_var_spc%i' % spc] = 1600
         # obs_err.loc[np.isnan(obs_err['obs_var_spc%i'%spc]),'obs_var_spc%i'%spc] = obs_err['obs_var_spc%i'%spc].median()
         obs_err.loc[:, 'obs_var_spc%i' % spc] **= 0.5
 
-        # TODO: ALTERNATIVE APPROACH: SMOOTH PERTURBATIONS DIRECTLY (v51)
         if gapfilled:
             obs_err.loc[:, 'obs_var_spc%i' % spc] = fill_gaps(obs_err, 'obs_var_spc%i' % spc, smooth=smooth)['obs_var_spc%i' % spc]
-
-        # plt.subplot(2,2,spc)
-        # plot_ease_img(obs_err, 'obs_var_spc%i'%spc, cbrange=[0,10], title='Species %i'%spc, cmap='jet')
-
-    # plt.tight_layout()
-    # plt.show()
 
     dtype = template_error_Tb40()[0]
 
@@ -643,8 +636,8 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
     template.index += 1
 
     modes = np.array([0, 0])
-    sdate = np.array([2010, 1, 1, 0, 0])
-    edate = np.array([2014, 1, 1, 0, 0])
+    sdate = np.array([2015, 4, 1, 0, 0])
+    edate = np.array([2020, 4, 1, 0, 0])
     lengths = np.array([len(template), len(angles)])  # tiles, incidence angles, whatever
 
     # ----- write output files -----
@@ -761,7 +754,7 @@ def plot_perturbations(root):
     imgA.index += 1
     imgD.index += 1
 
-    cbrange = [0,1000**0.5]
+    cbrange = [0,5]
 
     plt.figure(figsize=(20, 10))
 
@@ -782,15 +775,11 @@ def plot_perturbations(root):
 
 if __name__=='__main__':
 
-    curr_it = 11
-    anomaly = True
-    anom_type = 'moving_average'      # 'harmonic' / 'moving_average' / ''
+    curr_it = 13
+    anomaly = False
+    longterm = False
 
-    last_it = 611
-    mode = ''
-    sub = ''
-    # mode = 'anomaly'          # 'absolute' / 'anomaly' / ''
-    # sub = anom_type           # --> only needed BEFORE it 61 to distinguish between cases.
+    # last_it = 611
 
     root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
 
@@ -801,7 +790,8 @@ if __name__=='__main__':
     if not (root / 'error_files' ).exists():
         Path.mkdir(root / 'error_files' , parents=True)
 
-    calc_tb_mse(root, curr_it, anomaly=True, anom_type=anom_type)
+    # calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
+
     # calc_ens_var(root, curr_it)
     # calc_ens_cov(root, curr_it)
     # smooth_parameters(root)
@@ -816,8 +806,8 @@ if __name__=='__main__':
     # plot_P_R_check(curr_it, last_it)
     # plot_P_R_scl(curr_it, last_it)
 
-    # write_spatial_errors(root, curr_it)
-    # plot_perturbations(root)
+    write_spatial_errors(root, curr_it)
+    plot_perturbations(root)
 
     # list(map(plot_perturbations, ('532', '533')))
 

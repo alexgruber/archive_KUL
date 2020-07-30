@@ -97,6 +97,7 @@ def calc_stats(growth, countries=None, date_from=None, date_to=None, output=Fals
     xgrowth = growth.copy()
     xgrowth[xgrowth>1.7] = 1.7
 
+    # for ctr in countries:
     growth_mean = np.nanmean(xgrowth.loc[date_from:date_to, countries]) - mean_bias
     std = np.nanstd(xgrowth.loc[date_from:date_to, countries])
     growth_min = growth_mean - 1*std
@@ -131,13 +132,27 @@ def make_predictions(data, growth, countries, stat_start, date_from, date_to, me
     preds_data[[ctr + '_mean' for ctr in countries]] = data.loc[date_from].values.reshape(1,-1).repeat(len(idx), axis=0) * (np.full(len(idx),growth_mean)**np.arange(len(idx))).reshape(-1,1)
     preds_data[[ctr + '_max' for ctr in countries]] = data.loc[date_from].values.reshape(1,-1).repeat(len(idx), axis=0) * (np.full(len(idx),growth_max)**np.arange(len(idx))).reshape(-1,1)
 
-    preds_growth = pd.DataFrame(index=idx)
-    preds_growth['min'] = growth_min
+    preds_growth = pd.DataFrame(index=idx, columns=countries)
     preds_growth['mean'] = growth_mean
+    preds_growth['min'] = growth_min
     preds_growth['max'] = growth_max
 
     return preds_data, preds_growth
 
+def make_predictions_per_country(data, growth, countries, stat_start, date_from, date_to, mean_bias=0.0, output=False):
+
+    if not date_from:
+        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    idx = pd.date_range(start=date_from, end=date_to)
+    cols = [ctr + '_mean' for ctr in countries]
+    preds_data = pd.DataFrame(columns=cols, index=idx)
+
+    for ctr in countries:
+        growth_min, growth_mean, growth_max = calc_stats(growth, ctr, date_from=stat_start, mean_bias=mean_bias, output=output)
+        preds_data[ctr + '_mean'] = data.loc[date_from, ctr].repeat(len(idx), axis=0) * (np.full(len(idx),growth_mean)**np.arange(len(idx)))
+
+    return preds_data, None
 
 def print_time_to_threshold(preds, countries, threshold):
 
@@ -166,7 +181,7 @@ def plot(yscale='log', countries=None):
     pred_end = (t + timedelta(days=180)).strftime('%Y-%m-%d')
 
     plot_start = (t - timedelta(days=28)).strftime('%Y-%m-%d')
-    plot_end = (t + timedelta(days=14 )).strftime('%Y-%m-%d')
+    plot_end = (t + timedelta(days=14)).strftime('%Y-%m-%d')
 
     out_file = '/Users/u0116961/data_sets/COVID19/plot_' + yscale + '.png'
 
@@ -176,11 +191,11 @@ def plot(yscale='log', countries=None):
     data_cases_norm, _ = read_data(countries=countries, mode='cases', normalized=True)
     data_deaths_norm, _ = read_data(countries=countries, mode='deaths', normalized=True)
 
-    preds_data_cases, preds_growth_cases = make_predictions(data_cases, growth_cases, countries, stat_start, pred_start, pred_end)
-    preds_data_cases_norm, _ = make_predictions(data_cases_norm, growth_cases, countries, stat_start, pred_start, pred_end)
+    preds_data_cases, _ = make_predictions_per_country(data_cases, growth_cases, countries, stat_start, pred_start, pred_end)
+    preds_data_cases_norm, _ = make_predictions_per_country(data_cases_norm, growth_cases, countries, stat_start, pred_start, pred_end)
 
-    preds_data_deaths, preds_growth_deaths = make_predictions(data_deaths, growth_deaths, countries, stat_start, pred_start, pred_end)
-    preds_data_deaths_norm, _= make_predictions(data_deaths_norm, growth_deaths, countries, stat_start, pred_start, pred_end)
+    preds_data_deaths, _ = make_predictions_per_country(data_deaths, growth_deaths, countries, stat_start, pred_start, pred_end)
+    preds_data_deaths_norm, _= make_predictions_per_country(data_deaths_norm, growth_deaths, countries, stat_start, pred_start, pred_end)
 
     # print_time_to_threshold(preds_data_cases, countries, 10000)
     # print_time_to_threshold(preds_data_cases, countries, 60000)
@@ -189,14 +204,14 @@ def plot(yscale='log', countries=None):
 
     fontsize = 12
     markersize = 6
-    ylim_growth_cases = (0.95,1.1)
-    ylim_growth_deaths = (0.95,1.05)
+    ylim_growth_cases = (0.99,1.06)
+    ylim_growth_deaths = (0.99,1.05)
 
-    ylim_data_cases = (1e3, 3e6) if yscale == 'log' else (0, 350000)
-    ylim_data_deaths = (1e1, 2e5) if yscale == 'log' else (0, 45000)
+    ylim_data_cases = (2e3, 8e6) if yscale == 'log' else (0, 350000)
+    ylim_data_deaths = (8e1, 2e5) if yscale == 'log' else (0, 45000)
 
-    ylim_data_cases_norm = (3e2, 1e4) if yscale == 'log' else (0, 7000)
-    ylim_data_deaths_norm = (1e1, 2e3) if yscale == 'log' else (0, 700)
+    ylim_data_cases_norm = (5e2, 2e4) if yscale == 'log' else (0, 7000)
+    ylim_data_deaths_norm = (2e1, 1e3) if yscale == 'log' else (0, 700)
 
     # population density normalized
     # ylim_data_cases_norm = (1e3, 2e5) if yscale == 'log' else (-500, 100000)
@@ -207,7 +222,7 @@ def plot(yscale='log', countries=None):
     plt.subplot(2,3,1)
     growth_cases.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=2.5, marker='o', markersize=markersize-1)
     colors = [line.get_color() for line in plt.gca().lines]
-    preds_growth_cases['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
+    # preds_growth_cases['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
     # plt.fill_between(preds_growth_cases.index, preds_growth_cases['min'].values, preds_growth_cases['max'].values, alpha=0.15, color='black')
     plt.title('Growth rate cases',fontsize=fontsize+2)
     plt.axhline(1, color='black', linestyle='-', linewidth=1.5)
@@ -218,7 +233,7 @@ def plot(yscale='log', countries=None):
     plt.subplot(2,3,4)
     growth_deaths.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=2.5, marker='o', markersize=markersize-1,legend=False)
     colors = [line.get_color() for line in plt.gca().lines]
-    preds_growth_deaths['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
+    # preds_growth_deaths['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
     # plt.fill_between(preds_growth_deaths.index, preds_growth_deaths['min'].values, preds_growth_deaths['max'].values, alpha=0.15, color='black')
     plt.title('Growth rate deaths',fontsize=fontsize+2)
     plt.axhline(1, color='black', linestyle='-', linewidth=1.5)
@@ -282,7 +297,7 @@ if __name__=='__main__':
 
     # countries_select = ['Italy', 'Belgium', 'Austria', 'Croatia', 'Germany', 'Spain', 'Switzerland', 'France', 'Sweden', 'United_Kingdom', 'Hungary', 'Ireland', 'Norway', 'Poland', 'Portugal', 'Netherlands', 'Bulgaria', 'Serbia', 'Bosnia_and_Herzegovina']
 
-    for yscale in ['linear',]:
+    for yscale in ['log']:
         plot(countries=countries_select, yscale=yscale)
 
 

@@ -245,10 +245,8 @@ def filter_diagnostics_evaluation(root, iteration):
     result_file = root / 'filter_diagnostics.nc'
 
     iter1 = LDAS_io('ObsFcstAna','US_M36_SMOS40_DA_cal_scaled')
-    iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 4)
-    iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 5)
-    # iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 2))
-    # iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % (iteration - 1))
+    iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 61)
+    iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 611)
     iter4 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration)
 
     runs = OrderedDict([(1,iter1.timeseries),
@@ -278,16 +276,16 @@ def filter_diagnostics_evaluation(root, iteration):
 
 def validate_all():
 
-    iteration = 61
+    iteration = 612
 
     root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/iter_{iteration}/validation')
 
     if not root.exists():
         Path.mkdir(root, parents=True)
 
-    # insitu_evaluation(root, iteration)
-    TCA_insitu_evaluation(root, iteration)
-    # filter_diagnostics_evaluation(root, iteration)
+    insitu_evaluation(root, iteration)
+    # TCA_insitu_evaluation(root, iteration)
+    filter_diagnostics_evaluation(root, iteration)
 
 
 if __name__ == '__main__':
