@@ -7,10 +7,10 @@ from matplotlib.widgets import Slider, Button
 def WCM(SM, LAI, A, B, C, D, t_deg):
 
     theta = t_deg * np.pi / 180.
-    sig0s = C + D * SM
+    sig0s = 10 ** ((C + D * SM)/10)
     T2 = np.exp((-2 * B * LAI) / np.cos(theta))
     sig0v = A * LAI * np.cos(theta) * (1 - T2)
-    sig0 = T2 * sig0s + sig0v
+    sig0 = 10 * np.log10(T2 * sig0s + sig0v)
 
     return sig0
 
