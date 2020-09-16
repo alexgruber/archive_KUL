@@ -205,15 +205,19 @@ def reformat_lis_files(root, date_from=None, date_to=None):
                 res.variables['SWE'][i, :, :] = ds['SWE_inst'][:,:]
                 res.variables['LAI'][i, :, :] = ds['LAI_inst'][:,:]
 
-    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
+    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 --cnk_dmn layer,1' % len(dates)
     cmd = ' '.join([cmdBase, str(outfile_img), str(outfile_ts)])
     os.system(cmd)
 
 
-# if __name__=='__main__':
+from myprojects.experiments.LIS.reformat_netcdf_output import reformat_lis_files
+if __name__=='__main__':
 
     # reformat_ascat()
     # create_mask()
 
-    # root = '/scratch/leuven/320/vsc32046/output/LIS/noahmp36_spinup/025/SURFACEMODEL'
-    # reformat_lis_files(root, date_from='2007-01-01', date_to='2020-01-01')
+
+    root = '/scratch/leuven/320/vsc32046/output/LIS/noahmp401_spinup/025/SURFACEMODEL'
+    reformat_lis_files(root, date_from='2007-01-01', date_to='2020-01-01')
+
+    # ncks -4 -L 4 --cnk_dmn time,30000 --cnk_dmn lat,1 --cnk_dmn lon,1 --cnk_dmn layer,1 images.nc timeseries.nc

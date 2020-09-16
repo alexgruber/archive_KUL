@@ -274,7 +274,6 @@ def plot_ismn_eval():
     df[[x for x in df.columns if '_r_' in x]] = tmp
 
 
-
     # extract information about individual columns (which experiment, surface/root zone, r / rmsd, ...)
     exp = np.array(['_'.join(x.split('_')[1+offs:-3]) for x in df.columns])
     param = np.array([x.split('_')[0+offs] for x in df.columns])

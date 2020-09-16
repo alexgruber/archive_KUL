@@ -97,6 +97,7 @@ class ISMN_io(object):
         if len(tmp_data) < 10:
             return None
         tmp_data.name = 'insitu'
+        tmp_data.index = pd.DatetimeIndex(tmp_data.index).tz_localize(None)
 
         return tmp_data
 

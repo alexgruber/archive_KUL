@@ -25,7 +25,7 @@ def plot_increments():
     incr_var_cal = (cal.timeseries['srfexc'] + cal.timeseries['rzexc'] - cal.timeseries['catdef']).var(dim='time').values
     incr_var_uncal = (uncal.timeseries['srfexc'] + uncal.timeseries['rzexc'] - uncal.timeseries['catdef']).var(dim='time').values
 
-    print np.nanmean(incr_var_cal), np.nanmean(incr_var_uncal)
+    print(np.nanmean(incr_var_cal), np.nanmean(incr_var_uncal))
 
     tc = LDAS_io().grid.tilecoord
     tg = LDAS_io().grid.tilegrids
@@ -123,7 +123,7 @@ def plot_innovation_variance():
     innov_var_cal = ds['innov_var'][:, :, 1, :].mean(dim='species').values
     innov_var_uncal = ds['innov_var'][:, :, 3, :].mean(dim='species').values
 
-    print np.nanmean(innov_var_cal), np.nanmean(innov_var_uncal)
+    print(np.nanmean(innov_var_cal), np.nanmean(innov_var_uncal))
 
     lons = ds.lon.values
     lats = ds.lat.values
@@ -185,7 +185,7 @@ def plot_normalized_innovation_variance():
     innov_var_cal = ds['norm_innov_var'][:, :, 1, :].mean(dim='species').values
     innov_var_uncal = ds['norm_innov_var'][:, :, 3, :].mean(dim='species').values
 
-    print np.nanmean(innov_var_cal), np.nanmean(innov_var_uncal)
+    print(np.nanmean(innov_var_cal), np.nanmean(innov_var_uncal))
 
     lons = ds.lon.values
     lats = ds.lat.values

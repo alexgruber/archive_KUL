@@ -180,8 +180,8 @@ def plot(yscale='log', countries=None):
     pred_start = (t - timedelta(days=7)).strftime('%Y-%m-%d')
     pred_end = (t + timedelta(days=180)).strftime('%Y-%m-%d')
 
-    plot_start = (t - timedelta(days=28)).strftime('%Y-%m-%d')
-    plot_end = (t + timedelta(days=14)).strftime('%Y-%m-%d')
+    plot_start = (t - timedelta(days=56)).strftime('%Y-%m-%d')
+    plot_end = (t + timedelta(days=21)).strftime('%Y-%m-%d')
 
     out_file = '/Users/u0116961/data_sets/COVID19/plot_' + yscale + '.png'
 
@@ -293,7 +293,7 @@ def plot(yscale='log', countries=None):
 
 if __name__=='__main__':
 
-    countries_select = ['Italy', 'Germany', 'Belgium', 'Austria', 'United_Kingdom', 'Netherlands', 'United_States_of_America', 'Sweden', 'Croatia']
+    countries_select = ['Italy', 'Germany', 'Belgium', 'Austria', 'United_Kingdom', 'Netherlands', 'United_States_of_America', 'Sweden', 'Croatia',]
 
     # countries_select = ['Italy', 'Belgium', 'Austria', 'Croatia', 'Germany', 'Spain', 'Switzerland', 'France', 'Sweden', 'United_Kingdom', 'Hungary', 'Ireland', 'Norway', 'Poland', 'Portugal', 'Netherlands', 'Bulgaria', 'Serbia', 'Bosnia_and_Herzegovina']
 

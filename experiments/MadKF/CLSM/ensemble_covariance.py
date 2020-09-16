@@ -1,6 +1,11 @@
 
-import os
-os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
+if platform.system() == 'Linux':
+    import matplotlib
+    matplotlib.use("Qt5Agg")
+else:
+    import os
+    os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
+
 
 import pandas as pd
 import numpy as np
@@ -11,7 +16,6 @@ from mpl_toolkits.basemap import Basemap
 from pathlib import Path
 
 from pyldas.interface import LDAS_io
-
 from pyldas.templates import template_error_Tb40
 
 from sklearn.experimental import enable_iterative_imputer
@@ -148,8 +152,8 @@ def smooth_parameters(root):
 
 def calc_ens_cov(root, iteration):
 
-    exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
-    exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+    exp_ol = f'US_M36_SMAP_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMAP_TB_MadKF_DA_it{iteration}'
 
     param = 'ObsFcstAnaEns'
 
@@ -182,9 +186,9 @@ def calc_ens_cov(root, iteration):
 
             for i in np.arange(len(ts_ol)):
                 try:
-                    tmp_c_ol_obs[i] = np.cov(ts_ol.iloc[i,:],ts_obs.iloc[i,:])[0,1]
-                    tmp_c_ol_ana[i] = np.cov(ts_ol.iloc[i,:],ts_ana.iloc[i,:])[0,1]
-                    tmp_c_obs_ana[i] = np.cov(ts_obs.iloc[i,:],ts_ana.iloc[i,:])[0,1]
+                    tmp_c_ol_obs[i] = pd.concat((ts_ol.iloc[i,:],ts_obs.iloc[i,:]), axis='columns').cov().values[0,1]
+                    tmp_c_ol_ana[i] = pd.concat((ts_ol.iloc[i,:],ts_ana.iloc[i,:]), axis='columns').cov().values[0,1]
+                    tmp_c_obs_ana[i] = pd.concat((ts_obs.iloc[i,:],ts_ana.iloc[i,:]), axis='columns').cov().values[0,1]
                 except:
                     pass
 
@@ -370,9 +374,9 @@ def plot_ens_cov(root, last_it, mode='', sub=''):
         plt.close()
 
 
-def correct_mse(root, last_it, mode='', sub=''):
+def correct_mse(root, last_it):
 
-    xroot = Path(f'{str(root).split("_")[0]}_{last_it}') / mode / 'result_files' / sub
+    xroot = Path(f'{root.split("_")[0]}_{last_it}') / 'result_files'
     if not (fname := (xroot  / 'mse_corrected.csv')).exists():
         print(f'WARNING: mse_corrected.csv does not exist for iteration {last_it}... Using mse.csv instead.')
         fname = xroot  / 'mse.csv'
@@ -601,15 +605,15 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
     froot = root / 'error_files'
     fbase = 'SMOS_fit_Tb_'
 
-    exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
-    # exp = 'US_M36_SMAP_TB_MadKF_DA_it%i' % iteration
+    # exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    exp = 'US_M36_SMAP_TB_MadKF_DA_it%i' % iteration
     io = LDAS_io('ObsFcstAna', exp)
 
     fname = root / 'result_files' / 'ens_var.csv'
     ensvar = pd.read_csv(fname, index_col=0)
 
-    # fname = root / 'result_files' / 'mse_corrected.csv'
-    fname = root / 'result_files' / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
+    fname = root / 'result_files' / 'mse_corrected.csv'
+    # fname = root / 'result_files' / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
     mse = pd.read_csv(fname, index_col=0)
 
     obs_err = ensvar[['col','row']]
@@ -773,42 +777,45 @@ def plot_perturbations(root):
     plt.savefig(root / 'plots' / 'perturbations.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-if __name__=='__main__':
+def process_iteration(curr_it):
 
-    curr_it = 13
-    anomaly = False
-    longterm = False
+    if (curr_it % 10) == 1:
+        anomaly = False
+        longterm = False
+    elif (curr_it % 10) == 2:
+        anomaly = True
+        longterm = False
+    else:
+        anomaly = True
+        longterm = True
 
-    # last_it = 611
+    if int(13 / 10) == 1:
+        last_it = f'{curr_it}_init'
+    else:
+        last_it = f'{curr_it - 10}'
 
     root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
-
     if not (root / 'result_files').exists():
         Path.mkdir(root / 'result_files', parents=True)
-    if not (root / 'plots' ).exists():
+    if not (root / 'plots').exists():
         Path.mkdir(root / 'plots', parents=True)
-    if not (root / 'error_files' ).exists():
-        Path.mkdir(root / 'error_files' , parents=True)
+    if not (root / 'error_files').exists():
+        Path.mkdir(root / 'error_files', parents=True)
 
-    # calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
+    calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
 
-    # calc_ens_var(root, curr_it)
-    # calc_ens_cov(root, curr_it)
-    # smooth_parameters(root)
-
-    # correct_mse(root, last_it, mode=mode, sub=sub)
-    # plot_mse(root)
-
-    # plot_ens_var(root)
-    # plot_ens_cov(root, last_it, mode=mode, sub=sub)
-    # plot_obs_pert(root)
-
-    # plot_P_R_check(curr_it, last_it)
-    # plot_P_R_scl(curr_it, last_it)
+    calc_ens_var(root, curr_it)
+    calc_ens_cov(root, curr_it)
+    correct_mse(root, last_it)
 
     write_spatial_errors(root, curr_it)
     plot_perturbations(root)
 
-    # list(map(plot_perturbations, ('532', '533')))
+
+if __name__=='__main__':
+
+    curr_it = 21
+    process_iteration(curr_it)
+
 
 

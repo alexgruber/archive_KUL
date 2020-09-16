@@ -27,19 +27,19 @@ from validation_good_practice.plots import plot_ease_img
 
 def run_ascat_eval(iteration):
 
-    parts = 14
+    n_procs = 14
 
-    part = np.arange(parts) + 1
-    parts = repeat(parts, parts)
-    it = repeat(iteration, parts)
+    it = repeat(iteration, n_procs)
+    part = np.arange(n_procs) + 1
+    parts = repeat(n_procs, n_procs)
 
-    p = Pool(parts)
-    p.starmap(run_ascat_eval_part, zip(part, parts, it))
+    p = Pool(n_procs)
+    p.starmap(run_ascat_eval_part, zip(it, part, parts))
 
     res_path = f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}'
     merge_files(res_path, pattern='ascat_eval_part*.csv', fname='ascat_eval.csv', delete=True)
 
-def run_ascat_eval_part(part, parts, iteration):
+def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
 
     res_path = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}')
     if not res_path.exists():
@@ -71,6 +71,7 @@ def run_ascat_eval_part(part, parts, iteration):
     modes = ['absolute', 'longterm', 'shortterm']
 
     ascat = HSAF_io()
+    smap_path = Path('/Users/u0116961/data_sets/SMAP/timeseries')
 
     for cnt, (gpi, data) in enumerate(lut.iterrows()):
         print('%i / %i' % (cnt, len(lut)))
@@ -84,12 +85,19 @@ def run_ascat_eval_part(part, parts, iteration):
         res['lcol'] = col
         res['lrow'] = row
 
-        try:
-            ts_ascat = ascat.read(data['ascat_gpi'], resample_time=False).resample('1d').mean().dropna()
-            ts_ascat = ts_ascat[~ts_ascat.index.duplicated(keep='first')]
-            ts_ascat.name = 'ASCAT'
-        except:
-            continue
+        if ref == 'ascat':
+            try:
+                ts_ascat = ascat.read(data['ascat_gpi'], resample_time=False).resample('1d').mean().dropna()
+                ts_ascat = ts_ascat[~ts_ascat.index.duplicated(keep='first')]
+                ts_ascat.name = 'ASCAT'
+            except:
+                continue
+        else:
+            try:
+                ts_smap = pd.read_csv(smap_path / f'{gpi}.csv',
+                                      index_col=0, parse_dates=True, names=('smap',))['smap'].resample('1d').mean().dropna()
+            except:
+                continue
 
         t_df_smap = ds_obs_smap.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
         t_df_smos = ds_obs_smos.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
@@ -99,10 +107,16 @@ def run_ascat_eval_part(part, parts, iteration):
         var = 'sm_surface'
         for mode in modes:
 
-            if mode == 'absolute':
-                ts_ref = ts_ascat.copy()
+            if ref == 'ascat':
+                if mode == 'absolute':
+                    ts_ref = ts_ascat.copy()
+                else:
+                    ts_ref = calc_anom(ts_ascat.copy(), longterm=(mode == 'longterm')).dropna()
             else:
-                ts_ref = calc_anom(ts_ascat.copy(), longterm=(mode == 'longterm')).dropna()
+                if mode == 'absolute':
+                    ts_ref = ts_smap.copy()
+                else:
+                    ts_ref = calc_anom(ts_smap.copy(), longterm=(mode == 'longterm')).dropna()
 
             for run, ts_model in zip(names, dss):
 
@@ -134,11 +148,11 @@ def run_ascat_eval_part(part, parts, iteration):
         else:
             res.to_csv(result_file, float_format='%0.3f', mode='a', header=False)
 
-def plot_ascat_eval(iteration):
+def plot_eval(iteration):
 
     analysis_only = True
     relative = True
-    ref_exp = 'open_loop'
+    ref_exp = 'SMOS40_it631'
 
     sub = 'ana_' if analysis_only else ''
     fext = '_rel' if relative else '_abs'
@@ -205,14 +219,90 @@ def plot_ascat_eval(iteration):
 
         # plt.show()
 
+def plot_ascat_smap_eval(iteration):
+
+    analysis_only = True
+    relative = True
+    ref_exp = 'open_loop'
+
+    sub = 'ana_' if analysis_only else ''
+    fext = '_rel' if relative else '_abs'
+
+    res_ascat = pd.read_csv(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}/ascat_eval.csv', index_col=0)
+    res_smap = pd.read_csv(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}/smap_eval.csv', index_col=0)
+    fbase = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/plots/iter_{iteration}')
+    if not fbase.exists():
+        Path.mkdir(fbase, parents=True)
+
+    cbr_r = [0.6, 1.4] if relative else [0.2,0.7]
+    cbr_r = [-0.4, 0.4] if relative else [0.2,0.7]
+    cbr_len = [500, 1500]
+
+
+    exps = ['SMOSSMAP_short', 'SMAP_it11']
+    modes = ['absolute', 'longterm', 'shortterm']
+
+    # params = ['len', 'r']
+    # cbranges = [cbr_len, cbr_r]
+
+    params = ['r']
+    cbranges = [cbr_r]
+
+    fontsize = 12
+
+    for p, cbr in zip(params, cbranges):
+
+        cmap = 'seismic_r' if (p == 'r') & relative else 'YlGn'
+
+        f = plt.figure(figsize=(22,8))
+
+        for j, e in enumerate(exps):
+            for i, m in enumerate(modes):
+
+                plt.subplot(len(exps),len(modes), len(modes)*j + i + 1)
+
+                col = f'{sub}{p}_{e}_{m}'
+                if relative and (p != 'len'):
+                    ref_col = f'{sub}{p}_{ref_exp}_{m}'
+                    res_ascat[f'{col}_diff'] = (res_ascat[col] - res_ascat[ref_col])  / (1 - res_ascat[ref_col])
+                    res_smap[f'{col}_diff'] = (res_smap[col] - res_smap[ref_col])  / (1 - res_smap[ref_col])
+                    ext = '_diff'
+                else:
+                    ext = ''
+
+                if j == 0:
+                    im = plot_ease_img(res_ascat, f'{col}{ext}' , title=f'Skill gain {m} (ref: ASCAT)', cmap=cmap, cbrange=cbr, fontsize=fontsize, print_median=True)
+                else:
+                    im = plot_ease_img(res_smap, f'{col}{ext}' , title=f'Skill gain {m} (ref: SMAP)', cmap=cmap, cbrange=cbr, fontsize=fontsize, print_median=True)
+
+        f.subplots_adjust(wspace=0.04, hspace=0.025, bottom=0.06)
+        # pos1 = f.axes[-3].get_position()
+        # pos2 = f.axes[-4].get_position()
+        # x1 = (pos1.x0 + pos1.x1) / 2
+        # x2 = (pos2.x0 + pos2.x1) / 2
+        pos = f.axes[-2].get_position()
+        x1 = pos.x0
+        x2 = pos.x1
+        cbar_ax = f.add_axes([x1, 0.03, x2-x1, 0.03])
+        cbar = f.colorbar(im, orientation='horizontal', cax=cbar_ax)
+        for t in cbar.ax.get_xticklabels():
+            t.set_fontsize(fontsize)
+
+        f.savefig(fbase / f'ascat_smap_eval.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # plt.show()
+
 
 if __name__=='__main__':
 
     iteration = 1
 
     # run_ascat_eval(iteration)
+    # run_ascat_eval_part(iteration, 2, 2)
 
-    plot_ascat_eval(iteration)
+    plot_eval(iteration)
+    # plot_ascat_smap_eval(iteration)
 
 
 

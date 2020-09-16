@@ -4,13 +4,25 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Slider, Button
 
+def lin2db(x):
+    return 10 * np.log10(x)
+
+def db2lin(x):
+    return 10 ** (x/10)
+
 def WCM(SM, LAI, A, B, C, D, t_deg):
+    '''
+    A ~ scattering albedo
+    B ~ vegetation optical depth
+    C, D ~ slope, curvature of soil moisture / backscatter relation
+    '''
 
     theta = t_deg * np.pi / 180.
-    sig0s = 10 ** ((C + D * SM)/10)
-    T2 = np.exp((-2 * B * LAI) / np.cos(theta))
-    sig0v = A * LAI * np.cos(theta) * (1 - T2)
-    sig0 = 10 * np.log10(T2 * sig0s + sig0v)
+
+    T2 = np.exp((-2 * B * LAI) / np.cos(theta))         # Canopy attenuation
+    sig0s = db2lin(C + D * SM)                          # (linearized) soil backscatter
+    sig0v = A * LAI * np.cos(theta) * (1 - T2)          # vegetation backscatter
+    sig0 = lin2db(T2 * sig0s + sig0v)                   # Attenuated soil backscatter + vegetation backscatter
 
     return sig0
 

@@ -27,10 +27,9 @@ class HSAF_io(object):
         self.data_path = os.path.join(self.root, version)
         self.version = version.upper()
 
-        grid = Dataset(os.path.join(self.root, 'warp5_grid', 'TUW_WARP5_grid_info_2_2.nc'))
-        self.gpis = grid['gpi'][:][grid['land_flag'][:]==1]
-        self.cells = grid['cell'][:][grid['land_flag'][:]==1]
-        grid.close()
+        self.grid = Dataset(self.root / 'warp5_grid' / 'TUW_WARP5_grid_info_2_2.nc')
+        self.gpis = self.grid['gpi'][:][self.grid['land_flag'][:]==1]
+        self.cells = self.grid['cell'][:][self.grid['land_flag'][:]==1]
 
         self.loaded_cell = None
         self.fid = None
@@ -42,6 +41,9 @@ class HSAF_io(object):
 
         # self.frozen_snow_prob = xr.open_dataset(os.path.join(self.root, 'static_layer', 'frozen_snow_probability.nc'))
         # quite slow to read!
+
+    def latlon2gpi(self, lat, lon):
+        return np.argmin((self.grid['lat'][:] - lat)**2 + (self.grid['lon'][:] - lon)**2)
 
     def load(self, cell):
 
@@ -62,7 +64,12 @@ class HSAF_io(object):
 
         return True
 
-    def read(self, gpi, resample_time=True):
+    def read(self, *args, resample_time=True, var='sm'):
+
+        if len(args) == 1:
+            gpi = int(args[0])
+        else:
+            gpi = self.latlon2gpi(*args)
 
         if not gpi in self.gpis:
             print('GPI not found')
@@ -86,10 +93,10 @@ class HSAF_io(object):
         ind_valid = ((corr_flag==0)|(corr_flag==4)) & (conf_flag == 0) & (proc_flag == 0) & (ssf == 1)
 
         if len(np.where(ind_valid)[0]) == 0:
-            print('No valid data for gpi %i' % gpi)
+            print('No valid ASCAT data for gpi %i' % gpi)
             return None
 
-        sm = self.fid['sm'][start:end][ind_valid]
+        sm = self.fid[var][start:end][ind_valid]
 
         if resample_time is True:
             time = num2date(self.fid['time'][start:end][ind_valid].round(), units=self.fid['time'].units,
@@ -105,6 +112,7 @@ class HSAF_io(object):
             ts_ext = self.ext.read(gpi, resample_time=resample_time)
             ts = pd.concat((ts,ts_ext))
 
+        ts.name = 'ascat'
         return ts
 
     def close(self):
@@ -112,6 +120,8 @@ class HSAF_io(object):
             self.fid.close()
         if self.ext is not None:
             self.ext.close()
+        if self.grid is not None:
+            self.grid.close()
 
 
 def append_ease_gpis():
@@ -136,8 +146,8 @@ def append_ease_gpis():
     gpi_list.to_csv(r"D:\data_sets\ASCAT\warp5_grid\pointlist_warp_conus_w_ease_colrow.csv")
 
 
-if __name__=='__main__':
-    append_ease_gpis()
+# if __name__=='__main__':
+#     append_ease_gpis()
 
 
 
