@@ -180,7 +180,7 @@ def plot(yscale='log', countries=None):
     pred_start = (t - timedelta(days=7)).strftime('%Y-%m-%d')
     pred_end = (t + timedelta(days=180)).strftime('%Y-%m-%d')
 
-    plot_start = (t - timedelta(days=56)).strftime('%Y-%m-%d')
+    plot_start = (t - timedelta(days=42)).strftime('%Y-%m-%d')
     plot_end = (t + timedelta(days=21)).strftime('%Y-%m-%d')
 
     out_file = '/Users/u0116961/data_sets/COVID19/plot_' + yscale + '.png'
@@ -207,11 +207,11 @@ def plot(yscale='log', countries=None):
     ylim_growth_cases = (0.99,1.06)
     ylim_growth_deaths = (0.99,1.05)
 
-    ylim_data_cases = (2e3, 8e6) if yscale == 'log' else (0, 350000)
-    ylim_data_deaths = (8e1, 2e5) if yscale == 'log' else (0, 45000)
+    ylim_data_cases = (2e3, 1e7) if yscale == 'log' else (0, 350000)
+    ylim_data_deaths = (8e1, 4e5) if yscale == 'log' else (0, 45000)
 
-    ylim_data_cases_norm = (5e2, 2e4) if yscale == 'log' else (0, 7000)
-    ylim_data_deaths_norm = (2e1, 1e3) if yscale == 'log' else (0, 700)
+    ylim_data_cases_norm = (1e3, 3e4) if yscale == 'log' else (0, 7000)
+    ylim_data_deaths_norm = (3e1, 1e3) if yscale == 'log' else (0, 700)
 
     # population density normalized
     # ylim_data_cases_norm = (1e3, 2e5) if yscale == 'log' else (-500, 100000)

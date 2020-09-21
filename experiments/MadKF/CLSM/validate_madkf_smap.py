@@ -1,4 +1,6 @@
 
+import platform
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -36,12 +38,19 @@ def run_ascat_eval(iteration):
     p = Pool(n_procs)
     p.starmap(run_ascat_eval_part, zip(it, part, parts))
 
-    res_path = f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}'
+    res_path = f'~/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}'.expanduser()
     merge_files(res_path, pattern='ascat_eval_part*.csv', fname='ascat_eval.csv', delete=True)
 
 def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
 
-    res_path = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}')
+    if platform.system() == 'Linux':
+        stg = '/staging/leuven/stg_00024/OUTPUT/alexg'
+        smap_path = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/SMAP/timeseries')
+    else:
+        stg = None
+        smap_path = Path('/Users/u0116961/data_sets/SMAP/timeseries')
+
+    res_path = Path(f'~/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}').expanduser()
     if not res_path.exists():
         Path.mkdir(res_path, parents=True)
 
@@ -60,18 +69,18 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
 
     names = ['open_loop', 'SMOSSMAP_short', 'SMOS40_it631'] + [f'SMAP_it{iteration}{i}' for i in range(1,4)]
     runs = ['US_M36_SMAP_TB_OL_noScl', 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short', 'US_M36_SMOS40_TB_MadKF_DA_it613'] + [f'US_M36_SMAP_TB_MadKF_DA_it{iteration}{i}' for i in range(1,4)]
+    roots = [stg, stg, stg, None, None, None]
 
-    dss = [LDAS_io('xhourly', run).timeseries for run in runs]
-    grid = LDAS_io().grid
+    dss = [LDAS_io('xhourly', run, root=root).timeseries for run, root in zip(runs, roots)]
+    grid = dss[0].grid
 
     # t_ana = pd.DatetimeIndex(LDAS_io('ObsFcstAna', runs[0]).timeseries.time.values).sort_values()
-    ds_obs_smap = (LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_OL_noScl').timeseries['obs_ana'])
+    ds_obs_smap = (LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_OL_noScl', root=stg).timeseries['obs_ana'])
     ds_obs_smos = (LDAS_io('ObsFcstAna', 'US_M36_SMOS40_TB_MadKF_DA_it613').timeseries['obs_ana'])
 
     modes = ['absolute', 'longterm', 'shortterm']
 
     ascat = HSAF_io()
-    smap_path = Path('/Users/u0116961/data_sets/SMAP/timeseries')
 
     for cnt, (gpi, data) in enumerate(lut.iterrows()):
         print('%i / %i' % (cnt, len(lut)))
@@ -296,13 +305,19 @@ def plot_ascat_smap_eval(iteration):
 
 if __name__=='__main__':
 
-    iteration = 1
+    iteration = 2
 
-    # run_ascat_eval(iteration)
+    run_ascat_eval(iteration)
     # run_ascat_eval_part(iteration, 2, 2)
 
-    plot_eval(iteration)
+    # plot_eval(iteration)
     # plot_ascat_smap_eval(iteration)
 
+'''
+import sys
+sys.path.append('//data/leuven/320/vsc32046/python/')
+from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval
+process(21, 22, 23)
 
+'''
 
