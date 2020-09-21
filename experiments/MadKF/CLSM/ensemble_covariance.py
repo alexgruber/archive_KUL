@@ -2,13 +2,6 @@
 import warnings
 warnings.filterwarnings("ignore")
 
-import os
-import platform
-if platform.system() == 'Linux':
-    os.environ["PROJ_LIB"] = '/data/leuven/320/vsc32046/miniconda3/pkgs/proj4-5.2.0-he1b5a44_1006/share/proj'
-else:
-    os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
-
 import pandas as pd
 import numpy as np
 
@@ -828,8 +821,6 @@ if __name__=='__main__':
     process(21, 22, 23)
 
 '''
-import sys
-sys.path.append('//data/leuven/320/vsc32046/python/')
 from myprojects.experiments.MadKF.CLSM.ensemble_covariance import process
 process(21, 22, 23)
 

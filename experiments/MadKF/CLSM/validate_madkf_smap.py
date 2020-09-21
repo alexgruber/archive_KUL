@@ -27,9 +27,7 @@ from myprojects.functions import merge_files
 from validation_good_practice.ancillary.paths import Paths
 from validation_good_practice.plots import plot_ease_img
 
-def run_ascat_eval(iteration):
-
-    n_procs = 14
+def run_ascat_eval(iteration, n_procs=1):
 
     it = repeat(iteration, n_procs)
     part = np.arange(n_procs) + 1
@@ -38,7 +36,7 @@ def run_ascat_eval(iteration):
     p = Pool(n_procs)
     p.starmap(run_ascat_eval_part, zip(it, part, parts))
 
-    res_path = f'~/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}'.expanduser()
+    res_path = Path(f'~/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}').expanduser()
     merge_files(res_path, pattern='ascat_eval_part*.csv', fname='ascat_eval.csv', delete=True)
 
 def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
@@ -72,11 +70,11 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
     roots = [stg, stg, stg, None, None, None]
 
     dss = [LDAS_io('xhourly', run, root=root).timeseries for run, root in zip(runs, roots)]
-    grid = dss[0].grid
+    grid = LDAS_io('xhourly', runs[0], root=stg).grid
 
     # t_ana = pd.DatetimeIndex(LDAS_io('ObsFcstAna', runs[0]).timeseries.time.values).sort_values()
     ds_obs_smap = (LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_OL_noScl', root=stg).timeseries['obs_ana'])
-    ds_obs_smos = (LDAS_io('ObsFcstAna', 'US_M36_SMOS40_TB_MadKF_DA_it613').timeseries['obs_ana'])
+    ds_obs_smos = (LDAS_io('ObsFcstAna', 'US_M36_SMOS40_TB_MadKF_DA_it613', root=stg).timeseries['obs_ana'])
 
     modes = ['absolute', 'longterm', 'shortterm']
 
@@ -166,15 +164,14 @@ def plot_eval(iteration):
     sub = 'ana_' if analysis_only else ''
     fext = '_rel' if relative else '_abs'
 
-    res = pd.read_csv(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}/ascat_eval.csv', index_col=0)
-    fbase = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/plots/iter_{iteration}')
+    res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}/ascat_eval.csv').expanduser(), index_col=0)
+    fbase = Path(f'~/Documents/work/MadKF/CLSM/SMAP/plots/iter_{iteration}').expanduser()
     if not fbase.exists():
         Path.mkdir(fbase, parents=True)
 
     cbr_r = [0.6, 1.4] if relative else [0.2,0.7]
     cbr_r = [-0.3, 0.3] if relative else [0.2,0.7]
     cbr_len = [500, 1500]
-
 
     exps = ['SMOS40_it631', 'SMOSSMAP_short'] + [f'SMAP_it{iteration}{i}' for i in range(1, 4)]
     modes = ['absolute', 'longterm', 'shortterm']
@@ -307,17 +304,16 @@ if __name__=='__main__':
 
     iteration = 2
 
-    run_ascat_eval(iteration)
+    run_ascat_eval(iteration, n_procs=9)
     # run_ascat_eval_part(iteration, 2, 2)
 
-    # plot_eval(iteration)
+    plot_eval(iteration)
     # plot_ascat_smap_eval(iteration)
 
 '''
-import sys
-sys.path.append('//data/leuven/320/vsc32046/python/')
-from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval
-process(21, 22, 23)
+from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval, plot_eval
+iteration = 2
+run_ascat_eval(iteration, n_procs=9)
+plot_eval(iteration)
 
 '''
-
