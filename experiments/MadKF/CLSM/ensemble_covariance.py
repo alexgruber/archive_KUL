@@ -1,11 +1,13 @@
 
-if platform.system() == 'Linux':
-    import matplotlib
-    matplotlib.use("Qt5Agg")
-else:
-    import os
-    os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
+import warnings
+warnings.filterwarnings("ignore")
 
+import os
+import platform
+if platform.system() == 'Linux':
+    os.environ["PROJ_LIB"] = '/data/leuven/320/vsc32046/miniconda3/pkgs/proj4-5.2.0-he1b5a44_1006/share/proj'
+else:
+    os.environ["PROJ_LIB"] = '/Users/u0116961/opt/miniconda3/pkgs/proj4-5.2.0-h6de7cb9_1006/share/proj'
 
 import pandas as pd
 import numpy as np
@@ -14,6 +16,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 from pathlib import Path
+from multiprocessing import Pool
 
 from pyldas.interface import LDAS_io
 from pyldas.templates import template_error_Tb40
@@ -34,11 +37,11 @@ def tca(df):
 
 def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
-    # exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
-    # exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+    exp_ol = f'US_M36_SMAP_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMAP_TB_MadKF_DA_it{iteration}'
 
-    exp_ol = 'US_M36_SMAP_TB_OL_noScl'
-    exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    # exp_ol = 'US_M36_SMAP_TB_OL_noScl'
+    # exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
 
     param = 'ObsFcstAna'
 
@@ -84,11 +87,11 @@ def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
 def calc_ens_var(root, iteration):
 
-    exp_ol = 'US_M36_SMAP_TB_OL_noScl'
-    exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    # exp_ol = 'US_M36_SMAP_TB_OL_noScl'
+    # exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
 
-    # exp_ol = f'US_M36_SMOS40_TB_MadKF_OL_it{iteration}'
-    # exp_da = f'US_M36_SMOS40_TB_MadKF_DA_it{iteration}'
+    exp_ol = f'US_M36_SMAP_TB_MadKF_OL_it{iteration}'
+    exp_da = f'US_M36_SMAP_TB_MadKF_DA_it{iteration}'
 
     # param = 'ObsFcstAnaEns'
     param = 'ObsFcstAna'
@@ -165,36 +168,35 @@ def calc_ens_cov(root, iteration):
     ids = io_ol.grid.tilecoord['tile_id'].values
     res.loc[:, 'col'], res.loc[:, 'row'] = np.vectorize(io_ol.grid.tileid2colrow)(ids, local_cs=False)
 
-    for spc in [1,2,3,4]:
+    cov = lambda a, b: np.cov(a, b)[0, 1]
 
-        for cnt, (idx,val) in enumerate(io_ol.grid.tilecoord.iterrows()):
-            print('spc %i: %i / %i' % (spc, cnt, len(res)))
+    for cnt, (idx, val) in enumerate(io_ol.grid.tilecoord.iterrows()):
+        print(f'{cnt} / {len(res)}')
 
-            col, row = io_ol.grid.tileid2colrow(val.tile_id)
+        col, row = io_ol.grid.tileid2colrow(val.tile_id)
 
-            ts_ol = io_ol.read_ts('obs_fcst', col, row, species=spc, lonlat=False).dropna()
-            ts_obs = io_da.read_ts('obs_obs', col, row, species=spc, lonlat=False).dropna()
-            ts_ana = io_da.read_ts('obs_ana', col, row, species=spc, lonlat=False).dropna()
-            if len(ts_ana) == 0:
-                continue
-            ts_ol = ts_ol.reindex(ts_ana.index)
-            ts_obs = ts_obs.reindex(ts_ana.index)
+        ts_ol = io_ol.timeseries['obs_fcst'].isel(lat=row, lon=col).values
+        ts_obs = io_da.timeseries['obs_obs'].isel(lat=row, lon=col).values
+        ts_ana = io_da.timeseries['obs_ana'].isel(lat=row, lon=col).values
 
-            tmp_c_ol_obs = np.full(len(ts_ol),np.nan)
-            tmp_c_ol_ana = np.full(len(ts_ol),np.nan)
-            tmp_c_obs_ana = np.full(len(ts_ol),np.nan)
+        # ### This is to account for different ts length / ensemble sizes!
+        # ts_ol = ts_ol[:ts_ana.shape[0], :, :]
+        # ts_obs = ts_obs[:,:ts_ol.shape[1], :]
+        # ts_ana = ts_ana[:,:ts_ol.shape[1], :]
+        # ###
 
-            for i in np.arange(len(ts_ol)):
-                try:
-                    tmp_c_ol_obs[i] = pd.concat((ts_ol.iloc[i,:],ts_obs.iloc[i,:]), axis='columns').cov().values[0,1]
-                    tmp_c_ol_ana[i] = pd.concat((ts_ol.iloc[i,:],ts_ana.iloc[i,:]), axis='columns').cov().values[0,1]
-                    tmp_c_obs_ana[i] = pd.concat((ts_obs.iloc[i,:],ts_ana.iloc[i,:]), axis='columns').cov().values[0,1]
-                except:
-                    pass
+        tmp_ol = ts_ol.swapaxes(0, 1).reshape(ts_ol.shape[1], -1)
+        tmp_obs = ts_obs.swapaxes(0, 1).reshape(ts_obs.shape[1], -1)
+        tmp_ana = ts_ana.swapaxes(0, 1).reshape(ts_ana.shape[1], -1)
 
-            res.loc[idx,f'c_ol_obs_spc{spc}'] = np.nanmean(tmp_c_ol_obs)
-            res.loc[idx,f'c_ol_ana_spc{spc}'] = np.nanmean(tmp_c_ol_ana)
-            res.loc[idx,f'c_obs_ana_spc{spc}'] = np.nanmean(tmp_c_obs_ana)
+        c_ol_obs = np.nanmean(np.array([cov(tmp_ol[:, i], tmp_obs[:, i]) for i in range(tmp_ol.shape[-1])]).reshape(ts_ol.shape[0], -1), axis=0)
+        c_ol_ana = np.nanmean(np.array([cov(tmp_ol[:, i], tmp_ana[:, i]) for i in range(tmp_ol.shape[-1])]).reshape(ts_ol.shape[0], -1), axis=0)
+        c_obs_ana = np.nanmean(np.array([cov(tmp_obs[:, i], tmp_ana[:, i]) for i in range(tmp_ol.shape[-1])]).reshape(ts_ol.shape[0], -1), axis=0)
+
+        for spc in [1,2,3,4]:
+            res.loc[idx,f'c_ol_obs_spc{spc}'] = c_ol_obs[spc-1]
+            res.loc[idx,f'c_ol_ana_spc{spc}'] = c_ol_ana[spc-1]
+            res.loc[idx,f'c_obs_ana_spc{spc}'] = c_obs_ana[spc-1]
 
     fname = root / 'result_files' / 'ens_cov.csv'
 
@@ -208,9 +210,11 @@ def plot_ease_img2(data, tag,
                   cbrange=(-20, 20),
                   cmap='jet',
                   title='',
-                  fontsize=16):
+                  fontsize=16,
+                  io=None):
 
-    io = LDAS_io()
+    if io is None:
+        io = LDAS_io()
 
     tc = io.grid.tilecoord
 
@@ -376,7 +380,7 @@ def plot_ens_cov(root, last_it, mode='', sub=''):
 
 def correct_mse(root, last_it):
 
-    xroot = Path(f'{root.split("_")[0]}_{last_it}') / 'result_files'
+    xroot = Path(f'{str(root).split("_")[0]}_{last_it}') / 'result_files'
     if not (fname := (xroot  / 'mse_corrected.csv')).exists():
         print(f'WARNING: mse_corrected.csv does not exist for iteration {last_it}... Using mse.csv instead.')
         fname = xroot  / 'mse.csv'
@@ -551,11 +555,12 @@ def plot_obs_pert(root, smoothed=False):
     plt.close()
 
 
-def fill_gaps(xres, tags, smooth=False):
+def fill_gaps(xres, tags, smooth=False, grid=None):
 
     res = xres.copy()
 
-    grid = LDAS_io().grid
+    if grid is None:
+        grid = LDAS_io().grid
     lons, lats = np.meshgrid(grid.ease_lons, grid.ease_lats)
 
     ind_lat = res['row'].values.astype('int')
@@ -627,7 +632,7 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
         obs_err.loc[:, 'obs_var_spc%i' % spc] **= 0.5
 
         if gapfilled:
-            obs_err.loc[:, 'obs_var_spc%i' % spc] = fill_gaps(obs_err, 'obs_var_spc%i' % spc, smooth=smooth)['obs_var_spc%i' % spc]
+            obs_err.loc[:, 'obs_var_spc%i' % spc] = fill_gaps(obs_err, 'obs_var_spc%i' % spc, smooth=smooth, grid=io.grid)['obs_var_spc%i' % spc]
 
     dtype = template_error_Tb40()[0]
 
@@ -740,7 +745,7 @@ def plot_P_R_scl(root, last_it):
 
 
 
-def plot_perturbations(root):
+def plot_perturbations(root, iteration):
 
     # sub = 'smoothed' if smoothed else 'gapfilled' if gapfilled else 'raw'
     sub = ''
@@ -750,7 +755,7 @@ def plot_perturbations(root):
 
     dtype, hdr, length = template_error_Tb40()
 
-    io = LDAS_io()
+    io = LDAS_io('ObsFcstAna', f'US_M36_SMAP_TB_MadKF_OL_it{iteration}')
 
     imgA = io.read_fortran_binary(fA, dtype, hdr=hdr, length=length)
     imgD = io.read_fortran_binary(fD, dtype, hdr=hdr, length=length)
@@ -763,13 +768,13 @@ def plot_perturbations(root):
     plt.figure(figsize=(20, 10))
 
     plt.subplot(221)
-    plot_ease_img2(imgA,'err_Tbh', cbrange=cbrange, title='H-pol (Asc.)')
+    plot_ease_img2(imgA,'err_Tbh', cbrange=cbrange, title='H-pol (Asc.)', io=io)
     plt.subplot(222)
-    plot_ease_img2(imgA,'err_Tbv', cbrange=cbrange, title='V-pol (Asc.)')
+    plot_ease_img2(imgA,'err_Tbv', cbrange=cbrange, title='V-pol (Asc.)', io=io)
     plt.subplot(223)
-    plot_ease_img2(imgD,'err_Tbh', cbrange=cbrange, title='H-pol (Dsc.)')
+    plot_ease_img2(imgD,'err_Tbh', cbrange=cbrange, title='H-pol (Dsc.)', io=io)
     plt.subplot(224)
-    plot_ease_img2(imgD,'err_Tbv', cbrange=cbrange, title='V-pol (Dsc.)')
+    plot_ease_img2(imgD,'err_Tbv', cbrange=cbrange, title='V-pol (Dsc.)', io=io)
 
     # plt.tight_layout()
     # plt.show()
@@ -777,7 +782,13 @@ def plot_perturbations(root):
     plt.savefig(root / 'plots' / 'perturbations.png', dpi=300, bbox_inches='tight')
     plt.close()
 
+def process(*args):
+
+    Pool(len(args)).map(process_iteration, args)
+
 def process_iteration(curr_it):
+
+    print(f'Processing iteration {curr_it}...')
 
     if (curr_it % 10) == 1:
         anomaly = False
@@ -789,7 +800,7 @@ def process_iteration(curr_it):
         anomaly = True
         longterm = True
 
-    if int(13 / 10) == 1:
+    if int(curr_it / 10) == 1:
         last_it = f'{curr_it}_init'
     else:
         last_it = f'{curr_it - 10}'
@@ -809,13 +820,17 @@ def process_iteration(curr_it):
     correct_mse(root, last_it)
 
     write_spatial_errors(root, curr_it)
-    plot_perturbations(root)
+    plot_perturbations(root, curr_it)
 
 
 if __name__=='__main__':
 
-    curr_it = 21
-    process_iteration(curr_it)
+    process(21, 22, 23)
 
+'''
+import sys
+sys.path.append('//data/leuven/320/vsc32046/python/')
+from myprojects.experiments.MadKF.CLSM.ensemble_covariance import process
+process(21, 22, 23)
 
-
+'''
