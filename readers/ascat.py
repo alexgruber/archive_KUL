@@ -64,7 +64,7 @@ class HSAF_io(object):
 
         return True
 
-    def read(self, *args, resample_time=True, var='sm'):
+    def read(self, *args, var='sm', resample_time=False):
 
         if len(args) == 1:
             gpi = int(args[0])
@@ -86,17 +86,19 @@ class HSAF_io(object):
         start = self.fid['row_size'][0:loc].sum()
         end = start + self.fid['row_size'][loc]
 
-        corr_flag = self.fid['corr_flag'][start:end]
-        conf_flag = self.fid['conf_flag'][start:end]
-        proc_flag = self.fid['proc_flag'][start:end]
-        ssf = self.fid['ssf'][start:end]
-        ind_valid = ((corr_flag==0)|(corr_flag==4)) & (conf_flag == 0) & (proc_flag == 0) & (ssf == 1)
+        data = self.fid[var][start:end]
 
-        if len(np.where(ind_valid)[0]) == 0:
-            print('No valid ASCAT data for gpi %i' % gpi)
-            return None
-
-        sm = self.fid[var][start:end][ind_valid]
+        if var != 'sm':
+            ind_valid = np.arange(len(data))
+        else:
+            corr_flag = self.fid['corr_flag'][start:end]
+            conf_flag = self.fid['conf_flag'][start:end]
+            proc_flag = self.fid['proc_flag'][start:end]
+            ssf = self.fid['ssf'][start:end]
+            ind_valid = ((corr_flag==0)|(corr_flag==4)) & (conf_flag == 0) & (proc_flag == 0) & (ssf == 1)
+            if len(np.where(ind_valid)[0]) == 0:
+                print('No valid ASCAT soil moisture data for gpi %i' % gpi)
+                return None
 
         if resample_time is True:
             time = num2date(self.fid['time'][start:end][ind_valid].round(), units=self.fid['time'].units,
@@ -105,11 +107,11 @@ class HSAF_io(object):
             time = num2date(self.fid['time'][start:end][ind_valid], units=self.fid['time'].units,
                             only_use_python_datetimes=True, only_use_cftime_datetimes=False)
 
-        ts = pd.Series(sm, index=time)
+        ts = pd.Series(data[[ind_valid]], index=time)
         ts = ts.groupby(ts.index).mean()
 
         if self.ext is not None:
-            ts_ext = self.ext.read(gpi, resample_time=resample_time)
+            ts_ext = self.ext.read(gpi, var=var, resample_time=resample_time)
             ts = pd.concat((ts,ts_ext))
 
         ts.name = 'ascat'
