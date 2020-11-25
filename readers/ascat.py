@@ -64,7 +64,7 @@ class HSAF_io(object):
 
         return True
 
-    def read(self, *args, var='sm', resample_time=False):
+    def read(self, *args, var='sm', sampling_freq=None):
 
         if len(args) == 1:
             gpi = int(args[0])
@@ -100,18 +100,19 @@ class HSAF_io(object):
                 print('No valid ASCAT soil moisture data for gpi %i' % gpi)
                 return None
 
-        if resample_time is True:
-            time = num2date(self.fid['time'][start:end][ind_valid].round(), units=self.fid['time'].units,
+        if sampling_freq is not None:
+            k = 24/sampling_freq
+            time = num2date((self.fid['time'][start:end][ind_valid]*k).round()/k, units=self.fid['time'].units,
                             only_use_python_datetimes=True, only_use_cftime_datetimes=False)
         else:
             time = num2date(self.fid['time'][start:end][ind_valid], units=self.fid['time'].units,
                             only_use_python_datetimes=True, only_use_cftime_datetimes=False)
 
         ts = pd.Series(data[[ind_valid]], index=time)
-        ts = ts.groupby(ts.index).mean()
+        ts = ts[~ts.index.duplicated(keep='first')]
 
         if self.ext is not None:
-            ts_ext = self.ext.read(gpi, var=var, resample_time=resample_time)
+            ts_ext = self.ext.read(gpi, var=var, sampling_freq=sampling_freq)
             ts = pd.concat((ts,ts_ext))
 
         ts.name = 'ascat'
