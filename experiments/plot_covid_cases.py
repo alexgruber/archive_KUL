@@ -18,7 +18,8 @@ def download(date=None):
     else:
         t = datetime.now() - timedelta(days=1)
 
-    fname_in = 'https://www.ecdc.europa.eu/sites/default/files/documents/COVID-19-geographic-disbtribution-worldwide-%i-%02i-%02i.xlsx' % (t.year, t.month, t.day)
+    fname_in = 'https://opendata.ecdc.europa.eu/covid19/nationalcasedeath/xlsx'
+
     fname_out = '/Users/u0116961/data_sets/COVID19/%i_%02i_%02i.xlsx' %  (t.year, t.month, t.day)
 
     if os.path.isfile(fname_out):
@@ -180,7 +181,7 @@ def plot(yscale='log', countries=None):
     pred_start = (t - timedelta(days=7)).strftime('%Y-%m-%d')
     pred_end = (t + timedelta(days=180)).strftime('%Y-%m-%d')
 
-    plot_start = (t - timedelta(days=42)).strftime('%Y-%m-%d')
+    plot_start = (t - timedelta(days=56)).strftime('%Y-%m-%d')
     plot_end = (t + timedelta(days=21)).strftime('%Y-%m-%d')
 
     out_file = '/Users/u0116961/data_sets/COVID19/plot_' + yscale + '.png'
@@ -203,15 +204,15 @@ def plot(yscale='log', countries=None):
     f = plt.figure(figsize=(24,12))
 
     fontsize = 12
-    markersize = 6
-    ylim_growth_cases = (0.99,1.06)
-    ylim_growth_deaths = (0.99,1.05)
+    markersize = 5
+    ylim_growth_cases = (0.99,1.08)
+    ylim_growth_deaths = (0.99,1.06)
 
-    ylim_data_cases = (2e3, 1e7) if yscale == 'log' else (0, 350000)
-    ylim_data_deaths = (8e1, 4e5) if yscale == 'log' else (0, 45000)
+    ylim_data_cases = (7e3, 2e7) if yscale == 'log' else (0, 350000)
+    ylim_data_deaths = (1e2, 4e5) if yscale == 'log' else (0, 45000)
 
-    ylim_data_cases_norm = (1e3, 3e4) if yscale == 'log' else (0, 7000)
-    ylim_data_deaths_norm = (3e1, 1e3) if yscale == 'log' else (0, 700)
+    ylim_data_cases_norm = (3e3, 7e4) if yscale == 'log' else (0, 7000)
+    ylim_data_deaths_norm = (5e1, 2e3) if yscale == 'log' else (0, 700)
 
     # population density normalized
     # ylim_data_cases_norm = (1e3, 2e5) if yscale == 'log' else (-500, 100000)
@@ -220,7 +221,7 @@ def plot(yscale='log', countries=None):
     # ----------------------------------------------------------------------
     # --- Growth rate ---
     plt.subplot(2,3,1)
-    growth_cases.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=2.5, marker='o', markersize=markersize-1)
+    growth_cases.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=1.5, marker='o', markersize=markersize-1)
     colors = [line.get_color() for line in plt.gca().lines]
     # preds_growth_cases['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
     # plt.fill_between(preds_growth_cases.index, preds_growth_cases['min'].values, preds_growth_cases['max'].values, alpha=0.15, color='black')
@@ -231,7 +232,7 @@ def plot(yscale='log', countries=None):
     plt.gca().set_xticks([])
 
     plt.subplot(2,3,4)
-    growth_deaths.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=2.5, marker='o', markersize=markersize-1,legend=False)
+    growth_deaths.loc[plot_start::,:].plot(ax=plt.gca(),fontsize=fontsize, linewidth=1.5, marker='o', markersize=markersize-1,legend=False)
     colors = [line.get_color() for line in plt.gca().lines]
     # preds_growth_deaths['mean'].plot(ax=plt.gca(), legend=False, color='black', linestyle='--', linewidth=1)
     # plt.fill_between(preds_growth_deaths.index, preds_growth_deaths['min'].values, preds_growth_deaths['max'].values, alpha=0.15, color='black')
@@ -293,7 +294,7 @@ def plot(yscale='log', countries=None):
 
 if __name__=='__main__':
 
-    countries_select = ['Italy', 'Germany', 'Belgium', 'Austria', 'United_Kingdom', 'Netherlands', 'United_States_of_America', 'Sweden', 'Croatia',]
+    countries_select = ['Italy', 'Germany', 'Belgium', 'Austria', 'United_Kingdom', 'Netherlands', 'United_States_of_America', 'Sweden', 'Croatia',] #'Slovakia', 'Czechia']
 
     # countries_select = ['Italy', 'Belgium', 'Austria', 'Croatia', 'Germany', 'Spain', 'Switzerland', 'France', 'Sweden', 'United_Kingdom', 'Hungary', 'Ireland', 'Norway', 'Poland', 'Portugal', 'Netherlands', 'Bulgaria', 'Serbia', 'Bosnia_and_Herzegovina']
 
