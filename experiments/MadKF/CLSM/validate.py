@@ -240,14 +240,14 @@ def ncfile_init(fname, lats, lons, runs, species, tags):
 
     return ds
 
-def filter_diagnostics_evaluation(root, iteration):
+def filter_diagnostics_evaluation(root, it):
 
     result_file = root / 'filter_diagnostics.nc'
 
-    iter1 = LDAS_io('ObsFcstAna','US_M36_SMOS40_DA_cal_scaled')
-    iter2 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 61)
-    iter3 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % 611)
-    iter4 = LDAS_io('ObsFcstAna','US_M36_SMOS40_TB_MadKF_DA_it%i' % iteration)
+    iter1 = LDAS_io('ObsFcstAna',f'US_M36_SMAP_TB_MadKF_DA_it{it}1')
+    iter2 = LDAS_io('ObsFcstAna',f'US_M36_SMAP_TB_MadKF_DA_it{it}2')
+    iter3 = LDAS_io('ObsFcstAna',f'US_M36_SMAP_TB_MadKF_DA_it{it}3')
+    iter4 = LDAS_io('ObsFcstAna',f'US_M36_SMAP_TB_MadKF_DA_it{it}4')
 
     runs = OrderedDict([(1,iter1.timeseries),
                         (2,iter2.timeseries),
@@ -261,6 +261,17 @@ def filter_diagnostics_evaluation(root, iteration):
 
     species = iter1.timeseries['species'].values
 
+    # ---- Correction for obs_pert scaling ----
+    tg = LDAS_io().grid.tilegrids
+    tc = LDAS_io().grid.tilecoord
+    ind_col = tc.i_indg.values - tg.loc['domain', 'i_offg']
+    ind_row = tc.j_indg.values - tg.loc['domain', 'j_offg']
+    root_smap = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SMAP')
+    root_smos = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SMOS40')
+
+    # obs_err.loc[:, 'obs_var_spc%i' % spc] = ensvar['fcst_var_spc%i' % spc] * mse['mse_obs_spc%i' % spc] / mse['mse_fcst_spc%i' % spc]
+    # obs_mse = obs_var * fcst_mse / fcst_var
+
     with ncfile_init(result_file, lats, lons, [1,2,3,4], species, tags) as ds:
 
         for i_run,run in enumerate(runs):
@@ -268,24 +279,33 @@ def filter_diagnostics_evaluation(root, iteration):
 
                 logging.info('run %i, species %i' % (i_run,i_spc))
 
-                ds['norm_innov_mean'][:,:,i_run,i_spc] = ((runs[run]['obs_obs'].isel(species=i_spc)- runs[run]['obs_fcst'].isel(species=i_spc)) /
-                                                          np.sqrt(runs[run]['obs_obsvar'].isel(species=i_spc) + runs[run]['obs_fcstvar'].isel(species=i_spc))).mean(dim='time').values
-                ds['norm_innov_var'][:,:,i_run,i_spc] = ((runs[run]['obs_obs'].isel(species=i_spc) - runs[run]['obs_fcst'].isel(species=i_spc)) /
-                                                         np.sqrt(runs[run]['obs_obsvar'].isel(species=i_spc) + runs[run]['obs_fcstvar'].isel(species=i_spc))).var(dim='time').values
+                if run < 4:
+                    tmproot = root_smap / f'iter_{it}{run}'
+                else:
+                    tmproot = root_smos / f'iter_612'
+                ensvar = pd.read_csv(tmproot / 'result_files' / 'ens_var.csv', index_col=0)
+                mse = pd.read_csv(tmproot / 'result_files' / 'mse_corrected.csv', index_col=0)
+                scl_arr = np.full((83, 173), np.nan)
+                scl_arr[ind_row, ind_col] = (mse[f'mse_fcst_spc{spc}'] / ensvar[f'fcst_var_spc{spc}']).values
+                scl_arr[np.isnan(scl_arr)] = 1
 
+                ds['norm_innov_mean'][:,:,i_run,i_spc] = ((runs[run]['obs_obs'].isel(species=i_spc) - runs[run]['obs_fcst'].isel(species=i_spc)) /
+                                                          np.sqrt(runs[run]['obs_obsvar'].isel(species=i_spc) * scl_arr + runs[run]['obs_fcstvar'].isel(species=i_spc))).mean(dim='time').values
+                ds['norm_innov_var'][:,:,i_run,i_spc] = ((runs[run]['obs_obs'].isel(species=i_spc) - runs[run]['obs_fcst'].isel(species=i_spc)) /
+                                                          np.sqrt(runs[run]['obs_obsvar'].isel(species=i_spc) * scl_arr + runs[run]['obs_fcstvar'].isel(species=i_spc))).var(dim='time').values
 
 def validate_all():
 
-    iteration = 612
+    iteration = 3
 
-    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/iter_{iteration}/validation')
+    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}')
 
     if not root.exists():
         Path.mkdir(root, parents=True)
 
-    insitu_evaluation(root, iteration)
+    # insitu_evaluation(root, iteration)
     # TCA_insitu_evaluation(root, iteration)
-    filter_diagnostics_evaluation(root, iteration)
+    # filter_diagnostics_evaluation(root, iteration)
 
 
 if __name__ == '__main__':

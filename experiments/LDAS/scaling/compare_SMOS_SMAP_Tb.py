@@ -30,20 +30,33 @@ def abbr2per(abbr):
     return '2015-04-01_2020-04-01' if abbr.lower() == 'short' else '2010-01-01_2020-04-01'
 
 def abbr2pent(abbr):
-    return '2015_p19_2020_p19' if abbr.lower() == 'short' else '2010_p01_2020_p19'
+    if abbr.lower() == 'short':
+        return '2015_p19_2020_p19'
+    elif abbr.lower() == 'long':
+        return '2010_p01_2020_p19'
+    else:
+        return '2010_p37_2015_p36'
+
 
 def create_climatology_ts(experiment):
 
     sensor, date = experiment[0], abbr2pent(experiment[1])
 
-    root = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+    if experiment[1] == 'old':
+        root = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files_old')
+    else:
+        root = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+
     dir_out = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/climatologies')
-    fout = f'{experiment[0]}_{experiment[1]}'
+    fout = '_'.join(experiment)
 
     if not dir_out.exists():
         Path.mkdir(dir_out, parents=True)
 
-    fbase = str(list(root.glob(f'*src_{sensor}_trg*{date}*.bin'))[0].name)[0:-10]
+    if experiment[1] == 'old':
+        fbase = str(list(root.glob(f'*zscore_stats_{date}*.bin'))[0].name)[0:-10]
+    else:
+        fbase = str(list(root.glob(f'*src_{sensor}_trg*{date}*.bin'))[0].name)[0:-10]
 
     io = LDAS_io()
     idx = io.grid.tilecoord.tile_id.values
@@ -133,12 +146,12 @@ def plot_climatology_ts(experiments):
             [32.300219, -107.117220], # New Mexico (low corr)
             [48.206665, -100.257308]] # North Dacota (good)
 
-    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/scaling_files_reshuffled')
+    root = Path(f'/Users/u0116961/Documents/work/LDAS/2020-03_scaling/climatologies')
     names = ['_'.join(exp) for exp in experiments]
     cols = getcols()
     dss = []
     for (sens, abbr) in experiments:
-        dss += [np.load(root / f'climatologies_{sens}_{abbr}.npy')]
+        dss += [np.load(root / f'{sens}_{abbr}.npy')]
 
     fontsize=10
     colors = ['orange','b','r','g','grey','magenta']
@@ -466,23 +479,28 @@ def run(fct, experiments):
 
 
 if __name__ == '__main__':
+    #
+    # experiments = [['SMOSSMAP_PCA', 'short'],
+    #                ['SMOSSMAP', 'long'],
+    #                ['SMOSSMAP', 'short'],
+    #                ['SMOS', 'long'],
+    #                ['SMOS', 'short'],
+    #                ['SMAP', 'short']]
 
-    experiments = [['SMOSSMAP_PCA', 'short'],
-                   ['SMOSSMAP', 'long'],
-                   ['SMOSSMAP', 'short'],
-                   ['SMOS', 'long'],
-                   ['SMOS', 'short'],
-                   ['SMAP', 'short']]
+    experiments = [['SMOSSMAP', 'short'],
+                   ['SMOS', 'old']]
 
     # experiments = ['SMAP', 'short']
 
+    create_climatology_ts(['SMOSSMAP', 'short'])
+
     # run(create_climatology_ts, experiments)
-    # plot_climatology_ts(experiments)
+    plot_climatology_ts(experiments)
 
     # calc_stats(experiments)
     # plot_stats(experiments)
 
-    plot_Tb_ts()
+    # plot_Tb_ts()
     # plot_Tb_clim_years_ts()
 
     # calc_Tb_stats()

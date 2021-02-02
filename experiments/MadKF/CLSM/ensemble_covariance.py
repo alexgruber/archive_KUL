@@ -7,6 +7,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
+from matplotlib.colors import LogNorm
 
 from pathlib import Path
 from multiprocessing import Pool
@@ -68,7 +69,11 @@ def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
                 ts_ana = calc_anom(ts_ana, longterm=longterm, window_size=45).dropna()
 
             df = pd.concat((ts_obs,ts_fcst,ts_ana),axis=1).dropna()
-            tc_res = tca(df)
+
+            if len(np.where(df.corr()<0.3)[0]) == 0:
+                tc_res = tca(df)
+            else:
+                tc_res = [np.nan, np.nan, np.nan]
 
             res.loc[idx,f'mse_obs_spc{spc}'] = tc_res[0]
             res.loc[idx,f'mse_fcst_spc{spc}'] = tc_res[1]
@@ -215,8 +220,8 @@ def plot_ease_img2(data, tag,
 
     img = np.full(lons.shape, np.nan)
 
-    ind_lat = tc.loc[data.index.values, 'j_indg']
-    ind_lon = tc.loc[data.index.values, 'i_indg']
+    ind_lat = tc.reindex(data.index)['j_indg']
+    ind_lon = tc.reindex(data.index)['i_indg']
 
     img[ind_lat, ind_lon] = data[tag]
     img_masked = np.ma.masked_invalid(img)
@@ -260,7 +265,8 @@ def plot_ease_img(data,tag,
                   plot_cb =True,
                   title='',
                   fontsize=12,
-                  sqrt=False):
+                  sqrt=False,
+                  log=False):
 
     grid = LDAS_io().grid
     lons,lats = np.meshgrid(grid.ease_lons, grid.ease_lats)
@@ -281,8 +287,10 @@ def plot_ease_img(data,tag,
     m.drawcoastlines()
     m.drawcountries()
     m.drawstates()
-
-    im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True)
+    if log is True:
+        im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True, norm=LogNorm())
+    else:
+        im = m.pcolormesh(lons, lats, img_masked, cmap=cmap, latlon=True)
     im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
 
     if plot_cb is True:
@@ -401,57 +409,43 @@ def correct_mse(root, last_it):
     res.to_csv(fname_out)
 
 
-def plot_mse(root, sub=''):
+def plot_mse_ratio(root):
 
     fontsize = 16
 
-    for corrected in [False, True]:
-    # for corrected in [False,]:
+    # fname_in = root / 'result_files' / 'mse.csv'
+    # fname_out = root / 'plots' / 'mse_ratio_uncorrected.png'
 
-        if corrected:
-            fname_in = root / 'result_files' / sub / 'mse_corrected.csv'
-            fname_out = root / 'plots' / sub / 'mse_corrected.png'
+    fname_in = root / 'result_files' / 'mse_corrected.csv'
+    fname_out = root / 'plots' / 'mse_ratio_corrected.png'
+
+    res = pd.read_csv(fname_in, index_col=0)
+
+    plt.figure(figsize=(19,11))
+    cbrange = [0.1, 10]
+    cmap='jet'
+
+    for spc in [1, 2, 3, 4]:
+
+        if spc == 1:
+            spc_tit = 'H pol. / Asc.'
+        elif spc == 2:
+            spc_tit = 'H pol. / Dsc.'
+        elif spc == 3:
+            spc_tit = 'V pol. / Asc.'
         else:
-            fname_in = root / 'result_files' / sub / 'mse.csv'
-            fname_out = root / 'plots' / sub / 'mse_uncorrected.png'
+            spc_tit = 'V pol. / Dsc.'
 
-        res = pd.read_csv(fname_in, index_col=0)
+        plt.subplot(2, 2, spc)
 
-        plt.figure(figsize=(25,11))
-        cbrange = [0, 12]
-        cmap='jet'
+        res[f'mse_ratio_spc{spc}'] = res[f'mse_obs_spc{spc}'] / res[f'mse_fcst_spc{spc}']
 
-        for spc in [1, 2, 3, 4]:
+        plot_ease_img(res, f'mse_ratio_spc{spc}', cbrange=cbrange, title=f'R / P ({spc_tit})', cmap=cmap, sqrt=True, fontsize=fontsize, log=True)
 
-            if spc == 1:
-                spc_tit = 'H pol. / Asc.'
-            elif spc == 2:
-                spc_tit = 'H pol. / Dsc.'
-            elif spc == 3:
-                spc_tit = 'V pol. / Asc.'
-            else:
-                spc_tit = 'V pol. / Dsc.'
+    plt.savefig(fname_out, dpi=plt.gcf().dpi, bbox_inches='tight')
+    plt.close()
 
-            plt.subplot(3,4,spc)
-            plot_ease_img(res, 'mse_obs_spc%i'%spc, cbrange=cbrange, title=spc_tit, cmap=cmap, sqrt=True, fontsize=fontsize)
-            if spc == 1:
-                plt.ylabel('ubRMSE Observation', fontsize=fontsize)
-
-            plt.subplot(3,4,spc+4)
-            plot_ease_img(res, 'mse_fcst_spc%i'%spc, cbrange=cbrange, title='', cmap=cmap, sqrt=True, fontsize=fontsize)
-            if spc == 1:
-                plt.ylabel('ubRMSE Open Loop', fontsize=fontsize)
-
-            plt.subplot(3,4,spc+8)
-            plot_ease_img(res, 'mse_ana_spc%i'%spc, cbrange=cbrange, title='', cmap=cmap, sqrt=True, fontsize=fontsize)
-            if spc == 1:
-                plt.ylabel('ubRMSE Analysis', fontsize=fontsize)
-
-        # plt.tight_layout()
-        # plt.show()
-
-        plt.savefig(fname_out, dpi=plt.gcf().dpi, bbox_inches='tight')
-        plt.close()
+    # plt.show()
 
 
 def plot_ens_var(root, smoothed=False):
@@ -576,7 +570,7 @@ def fill_gaps(xres, tags, smooth=False, grid=None):
 
         # Define an anchor pixel to infer fitted image dimensions
         tmp_img = img.copy()
-        tmp_img[idx[0][100],idx[1][100]] = 1000000
+        tmp_img[idx[0][20],idx[1][20]] = 1000000
 
         # transform image with and without anchor pixel
         tmp_img_fitted = imp.transform(tmp_img)
@@ -584,7 +578,7 @@ def fill_gaps(xres, tags, smooth=False, grid=None):
 
         # # Get indices of fitted image
         idx_anchor = np.where(tmp_img_fitted == 1000000)[1][0]
-        start = idx[1][100] - idx_anchor
+        start = idx[1][20] - idx_anchor
         end = start + img_fitted.shape[1]
 
         # write output
@@ -604,14 +598,14 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
     fbase = 'SMOS_fit_Tb_'
 
     # exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
-    exp = 'US_M36_SMAP_TB_MadKF_DA_it%i' % iteration
+    exp = f'US_M36_SMAP_TB_MadKF_DA_it{iteration}'
     io = LDAS_io('ObsFcstAna', exp)
 
     fname = root / 'result_files' / 'ens_var.csv'
     ensvar = pd.read_csv(fname, index_col=0)
 
     fname = root / 'result_files' / 'mse_corrected.csv'
-    # fname = root / 'result_files' / 'mse.csv'                  #TODO: SHOULD BE MSE_CORRECTED!!
+    # fname = root / 'result_files' / 'mse.csv'                  # TODO: SHOULD BE MSE_CORRECTED!!
     mse = pd.read_csv(fname, index_col=0)
 
     obs_err = ensvar[['col','row']]
@@ -671,32 +665,37 @@ def write_spatial_errors(root, iteration, gapfilled=True, smooth=False):
 def plot_P_R_check(root, last_it):
 
     xroot = Path(f'{str(root).split("_")[0]}_{last_it}')
-    fname = xroot / 'result_files' / 'mse.csv'
+    fname = xroot / 'result_files' / 'mse_corrected.csv'
     res0 = pd.read_csv(fname, index_col=0).dropna()
 
     fname = root / 'result_files' / 'ens_var.csv'
     res1 = pd.read_csv(fname, index_col=0).dropna()
 
-    plt.figure(figsize=(24,11))
+    plt.figure(figsize=(25,11))
 
     cmap='jet'
 
     for spc in [1,2,3,4]:
 
+        cbrange = [0,2]
+        res0['ratio_mse_spc%i'%spc] = (res0['mse_fcst_spc%i'%spc] / res0['mse_obs_spc%i'%spc]) / (res1['fcst_var_spc%i'%spc] / res1['obs_var_spc%i'%spc])
+        plt.subplot(3,4,spc+8)
+        plot_ease_img(res0, 'ratio_mse_spc%i'%spc, cbrange=cbrange, title='P / R (mse / ensvar; spc%i)'%spc, cmap=cmap)
+
         cbrange = [0,15]
         res0['ratio_mse_spc%i'%spc] = res0['mse_fcst_spc%i'%spc] / res0['mse_obs_spc%i'%spc]
-        plt.subplot(2,4,spc+4)
+        plt.subplot(3,4,spc+4)
         plot_ease_img(res0, 'ratio_mse_spc%i'%spc, cbrange=cbrange, title='P / R (mse; spc%i)'%spc, cmap=cmap)
 
         cbrange = [0,15]
         res1['ratio_ensvar_spc%i'%spc] = res1['fcst_var_spc%i'%spc] / res1['obs_var_spc%i'%spc]
-        plt.subplot(2,4,spc)
+        plt.subplot(3,4,spc)
         plot_ease_img(res1, 'ratio_ensvar_spc%i'%spc, cbrange=cbrange, title='P / R (ensvar; spc%i)'%spc, cmap=cmap)
 
-    plt.tight_layout()
+    # plt.tight_layout()
 
     # plt.show()
-    plt.savefig(root / 'plots' / 'P_R_ratio.png', dpi=plt.gcf().dpi)
+    plt.savefig(root / 'plots' / 'P_R_ratio.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 
@@ -740,15 +739,13 @@ def plot_P_R_scl(root, last_it):
 
 def plot_perturbations(root, iteration):
 
-    # sub = 'smoothed' if smoothed else 'gapfilled' if gapfilled else 'raw'
-    sub = ''
-
-    fA = root / 'error_files' / sub / 'SMOS_fit_Tb_A.bin'
-    fD = root / 'error_files' / sub / 'SMOS_fit_Tb_D.bin'
+    fA = root / 'error_files' / 'SMOS_fit_Tb_A.bin'
+    fD = root / 'error_files' / 'SMOS_fit_Tb_D.bin'
 
     dtype, hdr, length = template_error_Tb40()
 
-    io = LDAS_io('ObsFcstAna', f'US_M36_SMAP_TB_MadKF_OL_it{iteration}')
+    io = LDAS_io('ObsFcstAna')
+    # io = LDAS_io('ObsFcstAna', f'US_M36_SMAP_TB_MadKF_OL_it{iteration}')
 
     imgA = io.read_fortran_binary(fA, dtype, hdr=hdr, length=length)
     imgD = io.read_fortran_binary(fD, dtype, hdr=hdr, length=length)
@@ -756,9 +753,9 @@ def plot_perturbations(root, iteration):
     imgA.index += 1
     imgD.index += 1
 
-    cbrange = [0,5]
+    cbrange = [0,15]
 
-    plt.figure(figsize=(20, 10))
+    plt.figure(figsize=(19, 11))
 
     plt.subplot(221)
     plot_ease_img2(imgA,'err_Tbh', cbrange=cbrange, title='H-pol (Asc.)', io=io)
@@ -798,6 +795,7 @@ def process_iteration(curr_it):
     else:
         last_it = f'{curr_it - 10}'
 
+    # root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/tmp').expanduser()
     root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
     if not (root / 'result_files').exists():
         Path.mkdir(root / 'result_files', parents=True)
@@ -812,13 +810,18 @@ def process_iteration(curr_it):
     calc_ens_cov(root, curr_it)
     correct_mse(root, last_it)
 
+    # plot_mse_ratio(root)
+    # plot_P_R_check(root, last_it)
+
     write_spatial_errors(root, curr_it)
     plot_perturbations(root, curr_it)
 
 
 if __name__=='__main__':
 
-    process(21, 22, 23)
+    process(41, 42, 43)
+
+    # process_iteration(31)
 
 '''
 from myprojects.experiments.MadKF.CLSM.ensemble_covariance import process

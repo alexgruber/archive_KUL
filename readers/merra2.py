@@ -64,9 +64,9 @@ def reformat():
     # fname_out = Path('/Users/u0116961/work/test.nc4')
     # root = Path('/Users/u0116961/work')
 
-    variables = ['SFMC', 'RZMC', 'PRMC', 'TSOIL1', 'TSURF', 'SWLAND', 'LWLAND']
+    variables = ['SFMC', 'RZMC', 'TSOIL1', 'LAI']
     latmin, latmax, lonmin, lonmax = 24., 51., -128., -64.
-    dates = pd.date_range('2010-01-01', '2018-12-31')
+    dates = pd.date_range('2010-01-01', '2019-12-31')
 
     with Dataset(list(root.glob('**/*_lnd_*' + dates[0].strftime('%Y%m%d') + '.nc4'))[0]) as ds:
         lats = ds['lat'][:]

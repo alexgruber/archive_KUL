@@ -99,9 +99,9 @@ def reformat(path_in, path_out):
                     fout[var][i,:,:] = ds[var][:,ind_lat,ind_lon]
 
 
-    #cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
-    #cmd = ' '.join([cmdBase, str(fname_img), str(fname_ts)])
-    #os.system(cmd)
+    cmdBase = 'ncks -4 -L 4 --cnk_dmn time,%i --cnk_dmn lat,1 --cnk_dmn lon,1 ' % len(dates)
+    cmd = ' '.join([cmdBase, str(fname_img), str(fname_ts)])
+    os.system(cmd)
 
 if __name__=='__main__':
 

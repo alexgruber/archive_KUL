@@ -3,9 +3,11 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
+from datetime import date
 
 from netCDF4 import Dataset
 
+import seaborn as sns
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
@@ -510,19 +512,78 @@ def plot_improvement_vs_uncertainty_update(iteration):
     # plt.tight_layout()
     # plt.show()
 
+def plot_ts(lon, lat):
+
+    experiments = ['US_M36_SMAP_TB_MadKF_DA_it34', 'US_M36_SMOS40_TB_MadKF_DA_it614', 'US_M36_SMOS40_TB_MadKF_DA_it615', 'US_M36_SMOS40_TB_MadKF_DA_it613']
+
+    f = plt.figure(figsize=(18,10))
+
+    for i, exp in enumerate(experiments):
+
+        if 'SMAP' in exp:
+            ol = 'US_M36_SMAP_TB_OL_noScl'
+        else:
+            ol = 'US_M36_SMOS40_TB_OL_noScl'
+
+        ds_ol = LDAS_io('ObsFcstAna', ol)
+        ds_da = LDAS_io('ObsFcstAna', exp)
+
+        ts_fcst = ds_ol.read_ts('obs_fcst', lon, lat)
+        ts_obs = ds_da.read_ts('obs_obs', lon, lat)
+        ts_ana = ds_da.read_ts('obs_ana', lon, lat)
+
+        spc = 1
+            # if spc == 1:
+            #     spc_tit = 'H pol. / Asc.'
+            # elif spc == 2:
+            #     spc_tit = 'H pol. / Dsc.'
+            # elif spc == 3:
+            #     spc_tit = 'V pol. / Asc.'
+            # else:
+            #     spc_tit = 'V pol. / Dsc.'
+
+        df = pd.concat((ts_fcst[spc], ts_obs[spc], ts_ana[spc]), axis='columns').dropna()
+        df.columns = ['Fcst', 'Obs', 'Ana']
+        df['time'] = df.index
+
+        ax = plt.subplot(4, 1, i+1)
+        g = sns.lineplot(x='time', y='Tb', hue='Variable', data=df.melt('time', df.columns[0:-1], 'Variable', 'Tb'))
+        plt.legend(loc='upper right')
+        if spc != 4:
+            g.set(xticklabels=[])
+        ax.set_xlabel('')
+        ax.set_xlim([date(2010,1,1), date(2020,1,1)])
+        ax.set_ylim([170,280])
+        # ax.set_ylabel('')
+        plt.title(exp)
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__=='__main__':
 
-    iteration = 612
-    root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
+    iteration = 3
+    # root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
+    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}')
 
     if not (root / 'plots').exists():
         Path.mkdir((root / 'plots'), parents=True)
 
+
+    # exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    # exp = 'US_M36_SMOS40_TB_MadKF_DA_it614'
+    # exp = 'US_M36_SMAP_TB_MadKF_DA_it34'
+
+    # lat, lon = 37.573933, -96.840000 # Kansas
+    # lat, lon = 44.434550, -99.703901 # South Dakota
+    # lat, lon = 41.203456192, -102.249755859 # Nebraska
+
+    # plot_ts(lon, lat)
+
     # plot_ismn_statistics(root)
     # plot_ismn_statistics_v2()
-    plot_ismn_statistics_v3(root)
-    # plot_filter_diagnostics(root, iteration)
+    # plot_ismn_statistics_v3(root)
+    plot_filter_diagnostics(root, iteration)
 
     # plot_improvement_vs_uncertainty_update(iteration)
 

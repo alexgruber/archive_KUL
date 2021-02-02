@@ -6,6 +6,7 @@ import platform
 
 import numpy as np
 import pandas as pd
+import scipy.io as sio
 from pathlib import Path
 
 from pyldas.interface import LDAS_io
@@ -30,10 +31,11 @@ def extract_smap_ldas_data():
 
     # Get SMAP data path and observation dates
     files = sorted(smap_root.glob('**/*.h5'))
-    dates = pd.to_datetime([str(f)[-29:-14] for f in files]).round('3h') # timedelta b/c wrongly assigned in LDAS!!
+    dates = pd.to_datetime([str(f)[-29:-14] for f in files]).round('3h')
+    dates_u = dates.unique()
 
     # Setup LDAS interface and get tile_coord LUT
-    io = LDAS_io()
+    io = LDAS_io(exp='US_M36_SMOS40_TB_MadKF_DA_it614')
     dtype, _, _ = get_template('xhourly_inst')
     tc_file = ldas_root_tc /  'GLOB_M36_7Thv_TWS_ensin_FOV0_M2.ldas_tilecoord.bin'
     tc = io.read_params('tilecoord', fname=tc_file)
@@ -44,11 +46,11 @@ def extract_smap_ldas_data():
     tc = tc.reindex(plist.tile_idx.values)
 
     # Create empty array to be filled w. SMAP and LDAS data
-    res_arr = np.full((len(dates), len(tc), 2), np.nan)
+    res_arr = np.full((len(dates_u), len(tc), 2), np.nan)
 
     ind_valid = [] # Keep only dates with valid data!
-    for dt, (f, date) in enumerate(zip(files, dates)):
-        print(f'Extracting date {dt} / {len(files)}...')
+    for cnt, (f, date) in enumerate(zip(files, dates)):
+        print(f'Processing file {cnt} / {len(files)}...')
         with h5py.File(f, mode='r') as arr:
             qf = arr['Soil_Moisture_Retrieval_Data']['retrieval_qual_flag'][:]
             idx = np.where((qf == 0) | (qf == 8))
@@ -72,16 +74,23 @@ def extract_smap_ldas_data():
                     data_ldas = io.read_fortran_binary(fname, dtype=dtype, length=n_tiles)
                     data_ldas.index += 1
 
-                    ind_valid.append(dt)
-                    res_arr[dt, inds_list[srt], 0] = sm[inds_smap[srt]]
-                    res_arr[dt, inds_list[srt], 1] = data_ldas.reindex(tc.iloc[inds_list[srt]].index)['sm_surface'].values
+                    dt_idx = np.where(dates_u == date)[0][0]
+                    if dt_idx not in ind_valid:
+                        ind_valid.append(dt_idx)
+                    res_arr[dt_idx, inds_list[srt], 0] = sm[inds_smap[srt]]
+                    res_arr[dt_idx, inds_list[srt], 1] = data_ldas.reindex(tc.iloc[inds_list[srt]].index)['sm_surface'].values
 
     res_arr = res_arr[ind_valid, :, :]
-    dates = dates[ind_valid]
+    dates_u = dates_u[ind_valid]
 
-    pd.Series(dates.to_julian_date(), index=dates).to_csv(out_path / 'dates.csv', header=None)
-    np.save(out_path / 'soil_moisture_smap_ldas', res_arr)
+    # Save date information
+    pd.Series(dates_u.to_julian_date(), index=dates_u).to_csv(out_path / 'dates.csv', header=None)
 
+    # Save output for Matlab
+    res_arr = {'smap' : res_arr[:,:,0], 'ldas' : res_arr[:,:,1]}
+    sio.savemat(out_path / 'soil_moisture_smap_ldas.mat', res_arr)
+    # np.save(out_path / 'soil_moisture_smap_ldas', res_arr)
 
 if __name__=='__main__':
+    from myprojects.experiments.LDAS.extract_smap_sm_4frederike import extract_smap_ldas_data
     extract_smap_ldas_data()

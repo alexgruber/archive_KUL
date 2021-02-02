@@ -275,7 +275,7 @@ def replace_angle_field():
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    args = ('SMAP', '2015-04-01', '2020-04-01')
-    run(args)
+    args = ('SMOS', '2009-04-01', '2015-04-01')
+    run(args, scale_target='SMOS')
 
     # replace_angle_field()
