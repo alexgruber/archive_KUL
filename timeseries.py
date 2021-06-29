@@ -185,7 +185,7 @@ def calc_clim_p(ts, mode='pentadal', n=3):
     return clim
 
 
-def calc_pentadal_mean_std(Ser, n_min=40, return_n=False):
+def calc_pentadal_mean_std(Ser, n_min=9, return_n=False):
     """
     Calculates the mean seasonal cycle as long-term mean within a 45 days moving average window
     for each pentad (Faster than "calc_clim_moving_average" because output only per pentad)

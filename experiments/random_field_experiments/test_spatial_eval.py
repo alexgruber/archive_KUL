@@ -67,8 +67,8 @@ def test_spatial_eval():
 
     recreate_fields = False
 
-    plot_map = False
-    plot_bias = True
+    plot_map = True
+    plot_bias = False
 
     plot_stations = False
 
@@ -105,9 +105,15 @@ def test_spatial_eval():
 
         vmin = 0.05
         vmax = 0.55
-        f, (ax_m, ax_c) = plt.subplots(1,2, figsize=(13,6))
+        f, (ax_c, ax_m) = plt.subplots(1,2, figsize=(13,6))
         sns.heatmap(field_m_agg, cmap='jet_r', ax=ax_m, vmin=vmin, vmax=vmax, cbar=False)
-        sns.heatmap(field_c_agg, cmap='jet_r', ax=ax_c, vmin=vmin, vmax=vmax)
+        sns.heatmap(field_c_agg, cmap='jet_r', ax=ax_c, vmin=vmin, vmax=vmax, cbar=False)
+
+        ax_c.set_xticks([])
+        ax_c.set_yticks([])
+
+        ax_m.set_xticks([])
+        ax_m.set_yticks([])
 
         plt.tight_layout()
 

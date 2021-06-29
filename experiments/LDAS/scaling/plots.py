@@ -11,19 +11,64 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from mpl_toolkits.basemap import Basemap
 
+import seaborn as sns
+sns.set_context('talk', font_scale=0.8)
+
 from pyldas.interface import LDAS_io
 
 from myprojects.timeseries import calc_clim_harmonic, calc_clim_moving_average
+from pytesmo.time_series.anomaly import calc_anomaly, calc_climatology
+
+def plot_innov_ts_example():
+
+    lat, lon = 41.70991616028507, -92.39133686043398
+
+    io_smap = LDAS_io('ObsFcstAna', exp='US_M36_SMOS40_DA_cal_scaled')
+    # io_smap = LDAS_io('ObsFcstAna', exp='US_M36_SMOS_DA_cal_scaled_yearly')
+
+    idx_lon, idx_lat = io_smap.grid.lonlat2colrow(lon, lat, domain=True)
+    print(idx_lon, idx_lat)
+
+    ts = io_smap.timeseries.isel(lat=idx_lat, lon=idx_lon, species=0).to_dataframe()[['obs_fcst', 'obs_obs']].dropna()
+
+    plt.figure(figsize=(21, 8))
+
+    ax = plt.subplot(2, 1, 1)
+    sns.lineplot(data=ts, dashes=False, ax=ax)
+    plt.title(f'{lat:.2f} N, {lon:.2f} W')
+    plt.xlabel('')
+    plt.ylabel('Tb')
+
+    # ---- cliamtology ----
+    ts['obs_fcst_clim'] = calc_anomaly(ts['obs_fcst'], return_clim=True, climatology=calc_climatology(ts['obs_fcst']))[
+        'climatology']
+    ts['obs_obs_clim'] = calc_anomaly(ts['obs_obs'], return_clim=True, climatology=calc_climatology(ts['obs_obs']))[
+        'climatology']
+
+    ts['obs_fcst_seas'] = ts['obs_fcst'] - calc_anomaly(ts['obs_fcst'])
+    ts['obs_obs_seas'] = ts['obs_obs'] - calc_anomaly(ts['obs_obs'])
+
+    ax = plt.subplot(2, 1, 2)
+    ts['climatology_scaled'] = ts['obs_obs'] - ts['obs_obs_clim'] + ts['obs_fcst_clim'] - ts['obs_fcst']
+    ts['seasonality_scaled'] = ts['obs_obs'] - ts['obs_obs_seas'] + ts['obs_fcst_seas'] - ts['obs_fcst']
+    sns.lineplot(data=ts[['climatology_scaled', 'seasonality_scaled']], dashes=False, ax=ax)
+    plt.axhline(color='black', linewidth=1, linestyle='--')
+    plt.xlabel('')
+    plt.ylabel('O-F')
+
+    plt.tight_layout()
+    plt.show()
 
 def plot_scaling_parameters():
 
-    fname = r"D:\data_sets\LDAS_runs\US_M36_SMOS_noDA_cal_unscaled\obs_scaling\7Thv_TbSM_001_SMOS_zscore_stats_2010_p37_2015_p36_hscale_0.00_W_9p_Nmin_20_A_p01_y2010.bin"
+    # fname = '/Users/u0116961/data_sets/LDASsa_runs/scaling_files/Thvf_TbSM_001_src_SMOSSMAP_trg_SMAP_2015_p19_2020_p19_W_9p_Nmin_20_A_p12.bin'
+    fname = '/Users/u0116961/data_sets/LDASsa_runs/scaling_files_yearly2/Thvf_TbSM_001_src_SMOSSMAP_trg_SMAP_2015_p19_2020_p19_W_9p_Nmin_20_A_p12_y2016.bin'
 
     io = LDAS_io('scaling ')
 
     res = io.read_scaling_parameters(fname=fname)
 
-    angle = 30
+    angle = 40
 
     res = res[['lon','lat','m_mod_H_%2i'%angle,'m_mod_V_%2i'%angle,'m_obs_H_%2i'%angle,'m_obs_V_%2i'%angle]]
     res.replace(-9999.,np.nan,inplace=True)
@@ -79,7 +124,8 @@ def plot_scaling_parameters():
 
 def plot_Tb_clims():
 
-    ts = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl').timeseries
+    # ts = LDAS_io('ObsFcstAna', exp='NLv4_M36_US_SMAP_TB_OL').timeseries
+    ts = LDAS_io('ObsFcstAna', exp='US_M36_SMAP_TB_OL_noScl', root='/Users/u0116961/data_sets/LDASsa_runs').timeseries
     data = pd.DataFrame(index=ts.time.values)
     data['obs'] = pd.to_numeric(ts['obs_obs'][:,0,45,30].values,errors='coerce')
     data['fcst'] = pd.to_numeric(ts['obs_fcst'][:,0,45,30].values,errors='coerce')
@@ -162,5 +208,7 @@ def plot_Tb_clims():
     plt.show()
 
 if __name__=='__main__':
+
     # plot_scaling_parameters()
     plot_Tb_clims()
+    # plot_innov_ts_example()

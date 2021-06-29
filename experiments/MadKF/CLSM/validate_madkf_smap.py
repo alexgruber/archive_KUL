@@ -15,6 +15,8 @@ from multiprocessing import Pool
 from scipy.stats import pearsonr
 
 import seaborn as sns
+sns.set_context('talk', font_scale=0.8)
+
 import matplotlib.pyplot as plt
 
 from pyldas.interface import LDAS_io
@@ -25,12 +27,14 @@ from myprojects.readers.ascat import HSAF_io
 from myprojects.timeseries import calc_anom
 from myprojects.functions import merge_files
 
+from pytesmo.time_series.anomaly import calc_climatology
+
 from validation_good_practice.ancillary.paths import Paths
 from validation_good_practice.plots import plot_ease_img
 
 def run_ascat_eval(iteration, n_procs=1):
 
-    res_path = Path(f'~/Documents/work/MadKF/CLSM/validation/iter_{iteration}').expanduser()
+    res_path = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/validation').expanduser()
     if not res_path.exists():
         Path.mkdir(res_path, parents=True)
 
@@ -52,11 +56,13 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
         stg = None
         smap_path = Path('/Users/u0116961/data_sets/SMAP/timeseries')
 
-    res_path = Path(f'~/Documents/work/MadKF/CLSM/validation/iter_{iteration}').expanduser()
+    res_path = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/validation').expanduser()
     if not res_path.exists():
         Path.mkdir(res_path, parents=True)
 
     result_file = res_path / ('ascat_eval_part%i.csv' % part)
+
+    tc_res = pd.read_csv('/Users/u0116961/Documents/work/validation_good_practice/CI80/ASCAT_SMAP_CLSM/result.csv', index_col=0)
 
     lut = pd.read_csv(Paths().lut, index_col=0)
 
@@ -69,18 +75,13 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
     # Look-up table that contains the grid cells to iterate over
     lut = lut.iloc[start:end, :]
 
-    # n_subits = 3
-    # names = ['open_loop', 'SMOSSMAP_short', 'SMOS40_it631'] + [f'SMAP_it{iteration}{i}' for i in range(1,n_subits + 1)]
-    # runs = ['US_M36_SMAP_TB_OL_noScl', 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short', 'US_M36_SMOS40_TB_MadKF_DA_it613'] + [f'US_M36_SMAP_TB_MadKF_DA_it{iteration}{i}' for i in range(1,n_subits + 1)]
-    # roots = [stg, stg, stg] + [None for i in range(1,n_subits + 1)]
+    rmsd_root = 'US_M36_SMAP_TB_DA_SM_ERR_'
+    rmsd_exps = list(np.sort([x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob('*SM_ERR_scl_seas*')]))
 
-    names = ['open_loop', 'SMOSSMAP_short'] + \
-            [f'SMAP_it3{i}' for i in range(1,5)] + \
-            [f'SMOS40_it61{i}' for i in range(3,6)]
-
-    runs = ['US_M36_SMAP_TB_OL_noScl', 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'] + \
-           [f'US_M36_SMAP_TB_MadKF_DA_it3{i}' for i in  range(1,5)] + \
-           [f'US_M36_SMOS40_TB_MadKF_DA_it61{i}' for i in range(3,6)]
+    names = ['open_loop', 'OL_no_pcorr', 'DA_4K_obserr_seas'] + \
+            rmsd_exps
+    runs = ['US_M36_SMAP_TB_OL_scaled_4K_obserr', 'US_M36_SMAP_TB_OL_scaled_noPcorr', 'US_M36_SMAP_TB_DA_scl_seas_4K_obserr'] + \
+           [rmsd_root + exp for exp in rmsd_exps]
 
     roots = [None for i in range(len(runs))]
 
@@ -88,7 +89,7 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
     grid = LDAS_io('ObsFcstAna', runs[0], root=stg).grid
 
     # t_ana = pd.DatetimeIndex(LDAS_io('ObsFcstAna', runs[0]).timeseries.time.values).sort_values()
-    ds_obs_smap = (LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_OL_noScl', root=stg).timeseries['obs_ana'])
+    ds_obs_smap = (LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_DA_scl_seas_4K_obserr', root=stg).timeseries['obs_ana'])
     ds_obs_smos1 = (LDAS_io('ObsFcstAna', 'US_M36_SMOS40_TB_MadKF_DA_it613', root=stg).timeseries['obs_ana'])
     ds_obs_smos2 = (LDAS_io('ObsFcstAna', 'US_M36_SMOS40_TB_MadKF_DA_it615', root=stg).timeseries['obs_ana'])
 
@@ -108,46 +109,68 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
         res['lcol'] = col
         res['lrow'] = row
 
-        if ref == 'ascat':
-            try:
-                ts_ascat = ascat.read(data['ascat_gpi'], resample_time=False).resample('1d').mean().dropna()
-                ts_ascat = ts_ascat[~ts_ascat.index.duplicated(keep='first')]
-                ts_ascat.name = 'ASCAT'
-            except:
-                continue
-        else:
-            try:
-                ts_smap = pd.read_csv(smap_path / f'{gpi}.csv',
-                                      index_col=0, parse_dates=True, names=('smap',))['smap'].resample('1d').mean().dropna()
-            except:
-                continue
+        try:
+            ts_ascat = ascat.read(data['ascat_gpi']).resample('1d').mean().dropna()
+            ts_ascat = ts_ascat[~ts_ascat.index.duplicated(keep='first')]
+            ts_ascat.name = 'ASCAT'
+        except:
+            continue
 
-
-        t_df_smos1 = ds_obs_smos1.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
-        t_df_smos2 = ds_obs_smos2.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
-        t_ana_smos1 = t_df_smos1[~np.isnan(t_df_smos1[1]) | ~np.isnan(t_df_smos1[2])].resample('1d').mean().index
-        t_ana_smos2 = t_df_smos2[~np.isnan(t_df_smos2[1]) | ~np.isnan(t_df_smos2[2])].resample('1d').mean().index
-
-        t_ana_smos_u = t_ana_smos1.union(t_ana_smos2)
-        t_ana_smos_i = t_ana_smos1.intersection(t_ana_smos2)
+        # if ref == 'ascat':
+        # else:
+        #     try:
+        #         ts_smap = pd.read_csv(smap_path / f'{gpi}.csv',
+        #                               index_col=0, parse_dates=True, names=('smap',))['smap'].resample('1d').mean().dropna()
+        #     except:
+        #         continue
+        # t_df_smos1 = ds_obs_smos1.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
+        # t_df_smos2 = ds_obs_smos2.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
+        # t_ana_smos1 = t_df_smos1[~np.isnan(t_df_smos1[1]) | ~np.isnan(t_df_smos1[2])].resample('1d').mean().index
+        # t_ana_smos2 = t_df_smos2[~np.isnan(t_df_smos2[1]) | ~np.isnan(t_df_smos2[2])].resample('1d').mean().index
+        # t_ana_smos_u = t_ana_smos1.union(t_ana_smos2)
+        # t_ana_smos_i = t_ana_smos1.intersection(t_ana_smos2)
 
         t_df_smap = ds_obs_smap.sel(species=[1, 2]).isel(lat=row, lon=col).to_pandas()
         t_ana_smap_u = t_df_smap[~np.isnan(t_df_smap[1]) | ~np.isnan(t_df_smap[2])].resample('1d').mean().index
-        t_ana_smap_i = t_ana_smap_u[(t_ana_smap_u >= t_ana_smos_i.min()) & (t_ana_smap_u <= t_ana_smos_i.max())]
+        # t_ana_smap_i = t_ana_smap_u[(t_ana_smap_u >= t_ana_smos_i.min()) & (t_ana_smap_u <= t_ana_smos_i.max())]
+        t_ana_smap_i = t_ana_smap_u
 
         var = 'sm_surface'
         for mode in modes:
 
-            if ref == 'ascat':
-                if mode == 'absolute':
-                    ts_ref = ts_ascat.copy()
+            try:
+                if mode == 'longterm':
+                    r_asc = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_lt_m_ASCAT_tc_ASCAT_SMAP_CLSM'])
+                    r_mod = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_lt_m_CLSM_tc_ASCAT_SMAP_CLSM'])
+                elif mode == 'longshortterm':
+                    r_asc = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_lst_m_ASCAT_tc_ASCAT_SMAP_CLSM'])
+                    r_mod = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_lst_m_CLSM_tc_ASCAT_SMAP_CLSM'])
+                elif mode == 'shortterm':
+                    r_asc = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_st_m_ASCAT_tc_ASCAT_SMAP_CLSM'])
+                    r_mod = np.sqrt(tc_res.loc[gpi, 'r2_grid_anom_st_m_CLSM_tc_ASCAT_SMAP_CLSM'])
                 else:
-                    ts_ref = calc_anom(ts_ascat.copy(), longterm=(mode == 'longterm')).dropna()
+                    r_asc = np.sqrt(tc_res.loc[gpi, 'r2_grid_abs_m_ASCAT_tc_ASCAT_SMAP_CLSM'])
+                    r_mod = np.sqrt(tc_res.loc[gpi, 'r2_grid_abs_m_CLSM_tc_ASCAT_SMAP_CLSM'])
+            except:
+                r_asc = np.nan
+                r_mod = np.nan
+
+            if mode == 'longshortterm':
+                ts_ref = calc_anom(ts_ascat.copy(), longterm=True).dropna()
+            elif mode == 'shortterm':
+                ts_ref = calc_anom(ts_ascat.copy(), longterm=False).dropna()
+            elif mode == 'longterm':
+                ts_ref = (calc_anom(ts_ascat.copy(), longterm=True) - calc_anom(ts_ascat.copy(), longterm=False)).dropna()
             else:
-                if mode == 'absolute':
-                    ts_ref = ts_smap.copy()
-                else:
-                    ts_ref = calc_anom(ts_smap.copy(), longterm=(mode == 'longterm')).dropna()
+                ts_ref = ts_ascat.dropna()
+
+            # if ref == 'ascat':
+            # else:
+            #     if mode == 'absolute':
+            #         ts_ref = ts_smap.copy()
+            #     else:
+            #         ts_ref = calc_anom(ts_smap.copy(), longterm=(mode == 'longterm')).dropna()
+
 
             for run, ts_model in zip(names, dss):
 
@@ -161,26 +184,36 @@ def run_ascat_eval_part(iteration, part, parts, ref='ascat'):
                 ts_mod = ts_model[var][:, row, col].to_series().loc[ind]
                 ts_mod.index += pd.to_timedelta('2 hours')
 
-                if mode == 'absolute':
-                    ts_mod = ts_mod.dropna()
+                if mode == 'longshortterm':
+                    ts_mod = calc_anom(ts_mod.copy(), longterm=True).dropna()
+                elif mode == 'shortterm':
+                    ts_mod = calc_anom(ts_mod.copy(), longterm=False).dropna()
+                elif mode == 'longterm':
+                    ts_mod = (calc_anom(ts_mod.copy(), longterm=True) - calc_anom(ts_mod.copy(), longterm=False)).dropna()
                 else:
-                    ts_mod = calc_anom(ts_mod, longterm=mode == 'longterm').dropna()
+                    ts_mod = ts_mod.dropna()
                 ts_mod = ts_mod.resample('1d').mean()
 
+                if run == 'open_loop':
+                    res[f'r_tca_{run}_{mode}'] = r_mod
+
                 tmp = pd.DataFrame({1: ts_ref, 2: ts_mod}).dropna()
-                res['len_' + run + '_' + mode] = len(tmp)
+                res[f'len_{run}_{mode}'] = len(tmp)
                 r, p = pearsonr(tmp[1], tmp[2]) if len(tmp) > 10 else (np.nan, np.nan)
-                res['r_' + run + '_' + mode] = r
+                res[f'r_{run}_{mode}'] = r
+                res[f'r_corr_{run}_{mode}'] = min(r / r_asc, 1)
 
                 tmp = pd.DataFrame({1: ts_ref, 2: ts_mod}).reindex(t_ana_u).dropna()
-                res['ana_u_len_' + run + '_' + mode] = len(tmp)
+                res[f'ana_u_len_{run}_{mode}'] = len(tmp)
                 r, p = pearsonr(tmp[1], tmp[2]) if len(tmp) > 10 else (np.nan, np.nan)
-                res['ana_u_r_' + run + '_' + mode] = r
+                res[f'ana_u_r_{run}_{mode}'] = r
+                res[f'ana_u_r_corr_{run}_{mode}'] = min(r / r_asc, 1)
 
                 tmp = pd.DataFrame({1: ts_ref, 2: ts_mod}).reindex(t_ana_i).dropna()
-                res['ana_i_len_' + run + '_' + mode] = len(tmp)
+                res[f'ana_i_len_{run}_{mode}'] = len(tmp)
                 r, p = pearsonr(tmp[1], tmp[2]) if len(tmp) > 10 else (np.nan, np.nan)
-                res['ana_i_r_' + run + '_' + mode] = r
+                res[f'ana_i_r_{run}_{mode}'] = r
+                res[f'ana_i_r_corr_{run}_{mode}'] = min(r / r_asc, 1)
 
         if not result_file.exists():
             res.to_csv(result_file, float_format='%0.3f')
@@ -289,9 +322,9 @@ def run_ascat_eval_smos_part(part, parts, ref='ascat'):
 
                 for i, p in enumerate(periods):
                     tmp = pd.DataFrame({1: ts_ref, 2: ts_mod})[p[0]:p[1]].dropna()
-                    res[f'p{i}_len_' + run + '_' + mode] = len(tmp)
+                    res[f'p{i}_len_{run}_{mode}'] = len(tmp)
                     r, p = pearsonr(tmp[1], tmp[2]) if len(tmp) > 10 else (np.nan, np.nan)
-                    res[f'p{i}_r_' + run + '_' + mode] = r
+                    res[f'p{i}_r_{run}_{mode}'] = r
 
         if not result_file.exists():
             res.to_csv(result_file, float_format='%0.3f')
@@ -561,7 +594,6 @@ def plot_smos_eval_diffs():
 
 def plot_smos_eval_diffs_insitu():
 
-
     res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SMOS40/validation/multiperiod/insitu/insitu_eval_smos.csv').expanduser(), index_col=0)
     fbase = Path(f'~/Documents/work/MadKF/CLSM/SMOS40/plots/multiperiod/insitu').expanduser()
 
@@ -616,32 +648,168 @@ def plot_smos_eval_diffs_insitu():
                 f.savefig(froot / f'{m}.png', dpi=300, bbox_inches='tight')
                 plt.close()
 
+
+def scatterplot_abs_vs_anom():
+
+    res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/validation/ascat_eval.csv').expanduser(), index_col=0)
+    fbase = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/plots/st_vs_lt_gain').expanduser()
+    if not fbase.exists():
+        Path.mkdir(fbase, parents=True)
+
+    ref='open_loop'
+    # ref='DA_4K_obserr'
+
+    fontsize = 12
+    cmap = 'seismic_r'
+
+    if ref=='open_loop':
+        xlim = [-0.45,0.15]
+        ylim = [-0.3,0.4]
+        vmax = 50
+    else:
+        xlim = [-0.15,0.15]
+        ylim = [-0.15,0.15]
+        vmax = 90
+    exps = ['abs_1', 'anom_lt_1', 'anom_st_3']
+    titles = ['P/R absolute', ' P/R long-term', ' P/R short-term ']
+
+    f = plt.figure(figsize=(17, 6))
+
+    for i, (exp, tit) in enumerate(zip(exps,titles)):
+
+        xcol = f'ana_u_r_{exp}_shortterm'
+        xrefcol = f'ana_u_r_{ref}_shortterm'
+
+        ycol = f'ana_u_r_{exp}_longterm'
+        yrefcol = f'ana_u_r_{ref}_longterm'
+
+        ax = plt.subplot(1, 3, i+1)
+        ax.hexbin(res[xcol] - res[xrefcol], res[ycol] - res[yrefcol],
+                  gridsize=45, extent=xlim+ylim, vmin=1, vmax=vmax, bins='log',
+                  cmap='jet', mincnt=1)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        plt.axhline(linewidth=1,linestyle='--',color='k')
+        plt.axvline(linewidth=1,linestyle='--',color='k')
+        # plt.plot([-1,1],[-1,1],'k--.', linewidth=1)
+        ax.set_title(tit)
+        if i==1:
+            ax.set_xlabel('$\Delta$R (short-term)')
+        if i==0:
+            ax.set_ylabel('$\Delta$R (long-term)')
+
+    f.savefig(fbase / f'ref_{ref}.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def scatterplot_gain_vs_skill():
+
+    res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/validation/ascat_eval.csv').expanduser(), index_col=0)
+    fbase = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/plots/gain_vs_skill').expanduser()
+    if not fbase.exists():
+        Path.mkdir(fbase, parents=True)
+
+    sensors = ['ASCAT', 'SMAP', 'CLSM']
+    tc_res = pd.read_csv('/Users/u0116961/Documents/work/validation_good_practice/CI80/ASCAT_SMAP_CLSM/result.csv', index_col=0)
+    for sens in sensors:
+        res[f'r2_{sens}_absolute'] = tc_res.reindex(res.index)[f'r2_grid_abs_m_{sens}_tc_ASCAT_SMAP_CLSM']
+        res[f'r2_{sens}_longterm'] = tc_res.reindex(res.index)[f'r2_grid_anom_lt_m_{sens}_tc_ASCAT_SMAP_CLSM']
+        res[f'r2_{sens}_shortterm'] = tc_res.reindex(res.index)[f'r2_grid_anom_st_m_{sens}_tc_ASCAT_SMAP_CLSM']
+
+    fontsize = 12
+    cmap = 'seismic_r'
+
+    xlim = [0,1]
+    ylim = [-0.3,0.4]
+    vmax = 50
+
+    ref = 'open_loop'
+    modes = ['absolute', 'longterm', 'shortterm']
+    exps = ['abs_1', 'anom_lt_1', 'anom_st_3']
+    titles = ['P/R absolute', ' P/R longterm', ' P/R shortterm']
+
+    for sens in sensors:
+
+        f = plt.figure(figsize=(16, 12))
+        for i, mode in enumerate(modes):
+            for j, (exp, tit) in enumerate(zip(exps,titles)):
+
+                xcol = f'r2_{sens}_{mode}'
+                # xcol = f'r2_{sens}_shortterm'
+
+                ycol = f'ana_u_r_{exp}_{mode}'
+                yrefcol = f'ana_u_r_{ref}_{mode}'
+
+                ax = plt.subplot(3, 3, i*3 + j + 1)
+                ax.hexbin(res[xcol], res[ycol] - res[yrefcol],
+                          gridsize=45, extent=xlim+ylim, vmin=1, vmax=vmax, bins='log',
+                          cmap='jet', mincnt=1)
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+                plt.axhline(linewidth=1,linestyle='--',color='k')
+                plt.axvline(linewidth=1,linestyle='--',color='k')
+                # plt.plot([-1,1],[-1,1],'k--.', linewidth=1)
+                if i==0:
+                    ax.set_title(tit)
+                if (i==2) & (j==1):
+                    ax.set_xlabel(f'R$^2$ {sens}')
+                if j==0:
+                    ax.set_ylabel(f'$\Delta$R ({mode})')
+
+        # plt.tight_layout()
+        # plt.show()
+
+        f.savefig(fbase / f'{sens}.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+
 def plot_eval(iteration):
 
     analysis_only = True
     relative = True
-    ref_exp = 'open_loop'
+    # ref_exp = 'open_loop'
+    ref_exp = 'OL_no_pcorr'
+
+    scaling = 'seas'
 
     sub = 'ana_' if analysis_only else ''
     fext = '_rel' if relative else '_abs'
-
-    res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SMOS40/validation/iter_{iteration}/ascat_eval.csv').expanduser(), index_col=0)
-    fbase = Path(f'~/Documents/work/MadKF/CLSM/SMOS40/plots/iter_{iteration}').expanduser()
+    res = pd.read_csv(Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/validation/ascat_eval.csv').expanduser(), index_col=0)
+    fbase = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/plots/ascat_eval/{scaling}/{ref_exp}').expanduser()
     if not fbase.exists():
         Path.mkdir(fbase, parents=True)
+
+    # tc_res = pd.read_csv('/Users/u0116961/Documents/work/validation_good_practice/CI80/ASCAT_SMAP_CLSM/result.csv', index_col=0)
+    # res['r2_ascat_absolute'] = tc_res.reindex(res.index)['r2_grid_abs_m_ASCAT_tc_ASCAT_SMAP_CLSM']
+    # res['r2_ascat_longterm'] = tc_res.reindex(res.index)['r2_grid_anom_lt_m_ASCAT_tc_ASCAT_SMAP_CLSM']
+    # res['r2_ascat_shortterm'] = tc_res.reindex(res.index)['r2_grid_anom_st_m_ASCAT_tc_ASCAT_SMAP_CLSM']
+    # topo = pd.read_csv('/Users/u0116961/data_sets/ASCAT/static_layer/topographic_complexity_conus.csv', index_col=0, squeeze=True, header=None)
 
     cbr_r = [0.6, 1.4] if relative else [0.2,0.7]
     cbr_r = [-0.3, 0.3] if relative else [0.2,0.7]
     cbr_len = [2e2, 2e3]
 
-    n_subits = 4
-    exps = ['SMAP_it31', 'SMAP_it32', 'SMAP_it33', 'SMAP_it34', 'SMOS40_it614', 'SMOS40_it615', 'SMOS40_it613']
+    rmsd_root = f'US_M36_SMAP_TB_DA_SM_ERR_scl_{scaling}_'
+    rmsd_exps = list(np.sort([x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob(f'*SM_ERR_scl_{scaling}*')]))
+    exps = ['open_loop', 'OL_no_pcorr', 'DA_4K_obserr_seas'] + \
+            rmsd_exps
+    # exps = ['open_loop', 'DA_4K_obserr'] + \
+    #         rmsd_exps
+
+    # rmsd_root = 'US_M36_SMAP_TB_DA_scl_'
+    # rmsd_exps = [x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob('*RMSD*')]
+    # exps = ['open_loop', 'DA_4K_obserr'] + \
+    #         [f'SMAP_it{i}{j}' for i in range(1, 5) for j in range(1, 4)] + \
+    #         rmsd_exps
+    #
+    # ind = [0,1,2,3,4,18,14,5,6,7,15,16,8,9,10,17,19,11,12,13]
+    # exps = np.array(exps)[ind]
+
     modes = ['absolute', 'shortterm', 'longterm']
 
     # params = ['ana_len']
     # cbranges = [cbr_len, cbr_len, cbr_r]
     #
-    params = ['u_r']
+    params = [f'u_r']
     cbranges = [cbr_r]
 
     fontsize = 12
@@ -650,36 +818,45 @@ def plot_eval(iteration):
 
         cmap = 'seismic_r' if ('r' in p) & relative else 'YlGn'
 
-        f = plt.figure(figsize=(29,9))
-
         for i, m in enumerate(modes):
-            for j, e in enumerate(exps):
 
-                # if 'SMOS40' in e:
-                #     p = 'ana_i_r'
-                # else:
-                #     p = 'r'
+            f = plt.figure(figsize=(25,17))
 
-                plt.subplot(len(modes),len(exps), len(exps)*i + j + 1)
+            cnt = 0
+            for e in exps:
+                cnt += 1
+                if cnt==6:
+                    cnt += 1
 
-                col = f'{sub}{p}_{e}_{m}'
+                # plt.subplot(4, 5, j+1)
+                plt.subplot(4, 3, cnt)
+                # plt.subplot(len(modes),len(exps), len(exps)*i + j + 1)
+
+                scl = '' if cnt < 4 else f'scl_{scaling}_'
+
+                col = f'{sub}{p}_{scl}{e}_{m}'
                 if relative and (p != 'len'):
                     ref_col = f'{sub}{p}_{ref_exp}_{m}'
-                    res[f'{col}_diff'] = (res[col] - res[ref_col]) / (1 - res[ref_col])
+                    res[f'{col}_diff'] = (res[col] - res[ref_col])
+
+                    # res.loc[topo.reindex(res.index) > 15, f'{col}_diff'] = np.nan
+
+                    # res[f'{col}_diff'] = (res[col] - res[ref_col]) / (1 - res[ref_col])
 
                     ext = '_diff'
                 else:
                     ext = ''
 
                 log_scale = True if 'len' in p else False
-                im = plot_ease_img(res, f'{col}{ext}' , title=f'{e} / {m}', cmap=cmap, cbrange=cbr, fontsize=fontsize, print_median=True, log_scale=log_scale)
+                im = plot_ease_img(res, f'{col}{ext}' , title=f'{e}', cmap=cmap, cbrange=cbr, fontsize=fontsize, print_median=True, log_scale=log_scale)
+                # im = plot_ease_img(res, f'{col}{ext}' , title=f'{e} / {m}', cmap=cmap, cbrange=cbr, fontsize=fontsize, print_median=True, log_scale=log_scale)
                 # if (i == 2) & (j == 1):
                 #     ax = im.axes
 
-        plot_centered_cbar(f, im, len(exps), fontsize=fontsize)
+            plot_centered_cbar(f, im, 5, fontsize=fontsize)
 
-        f.savefig(fbase / f'ascat_eval_{sub}{p}{fext}.png', dpi=300, bbox_inches='tight')
-        plt.close()
+            f.savefig(fbase / f'ascat_eval_{m}_{sub}{p}{fext}.png', dpi=300, bbox_inches='tight')
+            plt.close()
 
         # plt.show()
 
@@ -783,15 +960,17 @@ def plot_ascat_smap_eval(iteration):
 
 if __name__=='__main__':
 
-    # iteration = 6
+    iteration = 4
 
-    run_ascat_eval_smos(n_procs=14)
+    # run_ascat_eval_smos(n_procs=14)
     # run_ascat_eval_smos_part(2, 2)
 
     # run_insitu_eval_smos(n_procs=14)
     # run_insitu_eval_smos_part(3, 14)
 
-    # plot_eval(iteration)
+    plot_eval(iteration)
+    # scatterplot_abs_vs_anom()
+    # scatterplot_gain_vs_skill()
 
     # plot_smos_eval()
     # plot_smos_eval_insitu()
@@ -801,10 +980,13 @@ if __name__=='__main__':
 
     # plot_ascat_smap_eval(iteration)
 
+    # run_ascat_eval_part(iteration, 1, 1)
+
 '''
 from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval, plot_eval
 iteration = 4
 run_ascat_eval(iteration, n_procs=14)
-plot_eval(iteration)
+
+# plot_eval(iteration)
 
 '''

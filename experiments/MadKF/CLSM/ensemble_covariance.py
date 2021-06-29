@@ -83,13 +83,15 @@ def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
     res.to_csv(fname, float_format='%0.8f')
 
-def calc_ens_var(root, iteration):
+def calc_ens_var(root):
 
-    # exp_ol = 'US_M36_SMAP_TB_OL_noScl'
-    # exp_da = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
+    resdir = root / 'ens_vars' / 'noPcorr_scl_seas'
 
-    exp_ol = f'US_M36_SMAP_TB_MadKF_OL_it{iteration}'
-    exp_da = f'US_M36_SMAP_TB_MadKF_DA_it{iteration}'
+    if not resdir.exists():
+        Path.mkdir(resdir, parents=True)
+
+    exp_ol = 'US_M36_SMAP_TB_OL_scaled_noPcorr'
+    exp_da = 'US_M36_SMAP_TB_DA_scaled_4K_obserr'
 
     # param = 'ObsFcstAnaEns'
     param = 'ObsFcstAna'
@@ -126,7 +128,7 @@ def calc_ens_var(root, iteration):
             res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
             res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
 
-    fname = root / 'result_files' / 'ens_var.csv'
+    fname = resdir / 'ens_var.csv'
 
     res.to_csv(fname, float_format='%0.8f')
 
@@ -217,7 +219,6 @@ def plot_ease_img2(data, tag,
     tc = io.grid.tilecoord
 
     lons, lats = np.meshgrid(io.grid.ease_lons, io.grid.ease_lats)
-
     img = np.full(lons.shape, np.nan)
 
     ind_lat = tc.reindex(data.index)['j_indg']
@@ -440,7 +441,7 @@ def plot_mse_ratio(root):
 
         res[f'mse_ratio_spc{spc}'] = res[f'mse_obs_spc{spc}'] / res[f'mse_fcst_spc{spc}']
 
-        plot_ease_img(res, f'mse_ratio_spc{spc}', cbrange=cbrange, title=f'R / P ({spc_tit})', cmap=cmap, sqrt=True, fontsize=fontsize, log=True)
+        plot_ease_img(res, f'mse_ratio_spc{spc}', cbrange=cbrange, title=f'R / P ({spc_tit})', cmap=cmap, sqrt=False, fontsize=fontsize, log=True)
 
     plt.savefig(fname_out, dpi=plt.gcf().dpi, bbox_inches='tight')
     plt.close()
@@ -780,48 +781,51 @@ def process_iteration(curr_it):
 
     print(f'Processing iteration {curr_it}...')
 
-    if (curr_it % 10) == 1:
-        anomaly = False
-        longterm = False
-    elif (curr_it % 10) == 2:
-        anomaly = True
-        longterm = False
-    else:
-        anomaly = True
-        longterm = True
+    # if (curr_it % 10) == 1:
+    #     anomaly = False
+    #     longterm = False
+    # elif (curr_it % 10) == 2:
+    #     anomaly = True
+    #     longterm = False
+    # else:
+    #     anomaly = True
+    #     longterm = True
+    #
+    # if int(curr_it / 10) == 1:
+    #     last_it = f'{curr_it}_init'
+    # else:
+    #     last_it = f'{curr_it - 10}'
 
-    if int(curr_it / 10) == 1:
-        last_it = f'{curr_it}_init'
-    else:
-        last_it = f'{curr_it - 10}'
 
-    # root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/tmp').expanduser()
-    root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
-    if not (root / 'result_files').exists():
-        Path.mkdir(root / 'result_files', parents=True)
-    if not (root / 'plots').exists():
-        Path.mkdir(root / 'plots', parents=True)
-    if not (root / 'error_files').exists():
-        Path.mkdir(root / 'error_files', parents=True)
+    # root = Path(f'~/Documents/work/MadKF/CLSM/SMAP/iter_{curr_it}').expanduser()
+    # if not (root / 'result_files').exists():
+    #     Path.mkdir(root / 'result_files', parents=True)
+    # if not (root / 'plots').exists():
+    #     Path.mkdir(root / 'plots', parents=True)
+    # if not (root / 'error_files').exists():
+    #     Path.mkdir(root / 'error_files', parents=True)
 
-    calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
+    # calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
+    #
 
-    calc_ens_var(root, curr_it)
-    calc_ens_cov(root, curr_it)
-    correct_mse(root, last_it)
+    root = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio').expanduser()
+    calc_ens_var(root)
+    # calc_ens_cov(root, curr_it)
+    # correct_mse(root, last_it)
 
     # plot_mse_ratio(root)
+    # plot_ens_var(root)
     # plot_P_R_check(root, last_it)
 
-    write_spatial_errors(root, curr_it)
-    plot_perturbations(root, curr_it)
+    # write_spatial_errors(root, curr_it)
+    # plot_perturbations(root, curr_it)
 
 
 if __name__=='__main__':
 
-    process(41, 42, 43)
+    # process(21, 22, 23, 11, 12, 13)
 
-    # process_iteration(31)
+    process_iteration(1)
 
 '''
 from myprojects.experiments.MadKF.CLSM.ensemble_covariance import process

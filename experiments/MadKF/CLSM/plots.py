@@ -1,4 +1,7 @@
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 import pandas as pd
 
@@ -8,11 +11,19 @@ from datetime import date
 from netCDF4 import Dataset
 
 import seaborn as sns
+sns.set_context('talk', font_scale=0.8)
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 from pyldas.interface import LDAS_io
 from pyldas.templates import template_error_Tb40
+
+from myprojects.readers.ascat import HSAF_io
+from myprojects.readers.insitu import ISMN_io
+from myprojects.timeseries import calc_anom
+
+from pytesmo.temporal_matching import df_match
 
 def plot_image(img, lats, lons,
                 llcrnrlat=24,
@@ -58,6 +69,41 @@ def plot_image(img, lats, lons,
     x, y = m(-75, 25)
     plt.text(x, y, '= %.2f' % np.ma.std(img_masked), fontsize=fontsize - 3)
 
+def plot_filter_diagnostics_violins(root):
+
+    fname = root / 'filter_diagnostics.nc'
+
+    fontsize = 14
+
+    rmsd_root = 'US_M36_SMAP_TB_DA_scl_'
+    rmsd_exps = [x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob('*RMSD*')]
+    names = ['open_loop', 'DA_4K_obserr'] + \
+            [f'SMAP_it{i}{j}' for i in  range(1,5) for j in  range(1,4)] + \
+            rmsd_exps
+    species = [1,2,3,4]
+
+
+    sns.set_context('talk', font_scale=0.8)
+
+    with Dataset(fname) as ds:
+
+        acf = ds['innov_autocorr'][:,:,:,:].flatten()
+
+        df = pd.DataFrame({'acf': acf,
+                           'names': np.tile(names,int(len(acf)/len(names))),
+                           'species': np.repeat(species,int(len(acf)/len(species)))})
+
+        g = sns.catplot(x='names', y='acf', data=df, row='species', kind='violin', gridsize=300,height=2.5, aspect=7,
+                        ylim=[0.5, 1])
+
+        # [ax.set(ylim=ylim) for ax in g.axes]
+        # [ax.axhline(color='black', linestyle='--', linewidth=1.5) for ax in g.axes]
+        # g.set_titles('{col_name}')
+        # g.set_ylabels('')
+        # g.set_xlabels('')
+        # g.set_xticklabels(rotation=15)
+
+        plt.show()
 
 def plot_filter_diagnostics(root, iteration):
 
@@ -66,7 +112,15 @@ def plot_filter_diagnostics(root, iteration):
     fontsize = 14
 
     # iters = [0, iteration-2, iteration-1, iteration]
-    iters = [0, 1, 2, 3]
+    # iters = [0, 1, 2, 3]
+
+    rmsd_root = 'US_M36_SMAP_TB_DA_scl_'
+    rmsd_exps = [x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob('*RMSD*')]
+    runs = ['open_loop', 'DA_4K_obserr'] + \
+           [f'SMAP_it4{i}' for i in range(1, 4)] + \
+           rmsd_exps
+           # [f'SMOS40_it61{i}' for i in range(3, 6)] + \
+    iters = list(range(len(runs)))
 
     with Dataset(fname) as ds:
 
@@ -75,51 +129,71 @@ def plot_filter_diagnostics(root, iteration):
         lons, lats = np.meshgrid(lons, lats)
 
         # variables = ['norm_innov_mean',]
-        variables = ['norm_innov_mean','norm_innov_var']
-        cbranges = [[-1,1], [-3,5]]
-        steps = [0.5, 2]
+        variables = ['innov_autocorr','norm_innov_mean','norm_innov_var']
+        cbranges = [[0,0.7], [-0.5,0.5], [-2,4]]
+        steps = [0.5, 0.5, 2]
+        cmaps = ['YlOrRd','seismic','seismic']
 
-        for var, cbrange, step in zip(variables,cbranges,steps):
+        for var, cbrange, cmap, step in zip(variables, cbranges, cmaps, steps):
 
-            f = plt.figure(figsize=(19,10))
+            # f = plt.figure(figsize=(19,10))
 
             for spc in np.arange(4):
-                for it_tit, it in zip(iters,np.arange(4)):
 
-                    n = spc * 4 + it + 1
+                if 'autocorr' in var:
+                    f = plt.figure(figsize=(23, 9))
+                else:
+                    f = plt.figure(figsize=(29, 9))
 
-                    tit = 'Iter %i / Spc %i' % (it_tit, spc)
+                n = 0
+                for it_tit, it in zip(runs,iters):
 
-                    plt.subplot(4,4,n)
+                    n += 1
+                    # n = spc * 4 + it + 1
+                    # tit = 'Iter %i / Spc %i' % (it_tit, spc)
+
+                    if 'autocorr' in var:
+                        plt.subplot(3, 4, n)
+                    else:
+                        plt.subplot(3, 5, n)
 
                     data = ds.variables[var][:,:,it,spc]
-
                     plot_image(data, lats, lons,
-                               cmap='jet',
+                               cmap=cmap,
                                cbrange=cbrange,
                                fontsize = fontsize,
-                               title=tit)
+                               title=it_tit)
 
-            f.subplots_adjust(hspace=0, wspace=0.05, bottom=0.05)
+                    if ('autocorr' not in var) & ('SMAP' in it_tit):
+                        n += 1
+                        plt.subplot(3, 5, n)
+                        data = ds.variables[var + '_corr'][:, :, it, spc]
+                        plot_image(data, lats, lons,
+                                   cmap=cmap,
+                                   cbrange=cbrange,
+                                   fontsize=fontsize,
+                                   title=it_tit + '_corr')
 
-            pos1 = f.axes[-3].get_position()
-            pos2 = f.axes[-2].get_position()
+                f.subplots_adjust(hspace=0, wspace=0.05, bottom=0.05)
 
-            x1 = (pos1.x0 + pos1.x1)/2
-            x2 = (pos2.x0 + pos2.x1)/2
+                pos1 = f.axes[-3].get_position()
+                pos2 = f.axes[-2].get_position()
 
-            im1 = f.axes[0].collections[-1]
+                x1 = (pos1.x0 + pos1.x1)/2
+                x2 = (pos2.x0 + pos2.x1)/2
 
-            ticks = np.arange(cbrange[0], cbrange[1]+1, step)
+                im1 = f.axes[0].collections[-1]
 
-            cbar_ax = f.add_axes([x1, 0.04, x2-x1, 0.02])
-            cbar = f.colorbar(im1, orientation='horizontal', cax=cbar_ax, ticks=ticks)
-            for t in cbar.ax.get_xticklabels():
-                t.set_fontsize(fontsize)
+                ticks = np.arange(cbrange[0], cbrange[1]+1, step)
 
-            fout = root / 'plots' / (var + '.png')
-            f.savefig(fout, dpi=300, bbox_inches='tight')
-            plt.close()
+                cbar_ax = f.add_axes([x1, 0.04, x2-x1, 0.02])
+                cbar = f.colorbar(im1, orientation='horizontal', cax=cbar_ax, ticks=ticks)
+                for t in cbar.ax.get_xticklabels():
+                    t.set_fontsize(fontsize)
+
+                fout = root / 'plots' / f'iter_{iteration}' / f'{var}_spc{spc}.png'
+                f.savefig(fout, dpi=300, bbox_inches='tight')
+                plt.close()
 
             # plt.tight_layout()
             # plt.show()
@@ -342,6 +416,143 @@ def plot_ismn_statistics_v2():
 
             # plt.show()
 
+def find_suspicious_stations(root):
+
+    res = pd.read_csv(root / 'insitu_TCA.csv', index_col=0)
+    res.index = res.network + '_' + res.station
+    # res.drop(['network','station'], axis='columns', inplace=True)
+
+    res2 = pd.read_csv(root / 'insitu.csv', index_col=0)
+    res2.index = res2.network + '_' + res2.station
+    res2.drop(['network','station','lat','lon', 'ease_col','ease_row'], axis='columns', inplace=True)
+    res2 = res2[~res2.index.duplicated(keep='first')].reindex(res.index)
+
+    df = res[['network','station','ease_col','ease_row']].copy()
+
+    variables = ['sm_surface','sm_rootzone']
+    modes = ['absolute','longterm','shortterm']
+
+    for var in variables:
+        for mode in modes:
+            df[f'diff_pearsonr2_{mode}_{var}'] = res2[f'corr_DA_4K_obserr_{mode}_{var}']**2 - res2[f'corr_open_loop_{mode}_{var}']**2
+            df[f'diff_tcar2_{mode}_{var}'] = res[f'R2_model_DA_4K_obserr_{mode}_{var}'] - res[f'R2_model_open_loop_{mode}_{var}']
+
+    df = df[(df.network == 'SCAN') | (df.network == 'USCRN')].dropna()
+    df.to_csv('/Users/u0116961/Documents/work/MadKF/CLSM/suspicious_stations/station_list_r_diff.csv', float_format='%0.4f')
+
+def lonlat2gpi(lon,lat,gpi_list):
+
+    rdiff = np.sqrt((gpi_list.lon - lon)**2 + (gpi_list.lat - lat)**2)
+    return gpi_list.iloc[np.where((rdiff - rdiff.min()) < 0.0001)[0][0]].name
+
+def plot_suspicious_stations(root):
+
+    statlist = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/suspicious_stations/station_list_r_diff.csv', index_col=0)
+
+    rmsd_root = 'US_M36_SMAP_TB_DA_SM_PROXY_'
+    rmsd_exps = list(np.sort([x.name.split(rmsd_root)[1] for x in Path('/Users/u0116961/data_sets/LDASsa_runs').glob('*SM_PROXY*')]))
+
+    ds_ol = LDAS_io('xhourly', 'US_M36_SMAP_TB_OL_scaled_4K_obserr').timeseries
+    ds_da = LDAS_io('xhourly', 'US_M36_SMAP_TB_DA_scaled_4K_obserr').timeseries
+
+    ts_ana = LDAS_io('ObsFcstAna', 'US_M36_SMAP_TB_DA_scaled_4K_obserr').timeseries['obs_obs']
+    t_ana = pd.DatetimeIndex(ts_ana.time.values).sort_values()
+
+    ascat = HSAF_io()
+    gpi_list = pd.read_csv(ascat.root / 'warp5_grid' / 'pointlist_warp_conus.csv', index_col=0)
+
+    ismn = ISMN_io()
+
+    variables = ['sm_surface', 'sm_rootzone']
+    modes = ['absolute', 'longterm', 'shortterm']
+
+    ismn.list.index = ismn.list.network + '_' + ismn.list.station
+    ismn.list.reindex(statlist.index)
+    ismn.list = ismn.list.reindex(statlist.index)
+
+    for i, (meta, ts_insitu) in enumerate(ismn.iter_stations(surface_only=False)):
+        if 'tmp_res' in locals():
+            if (meta.network in tmp_res) & (meta.station in tmp_res):
+                print(f'Skipping {i}')
+                continue
+
+        try:
+            res = pd.DataFrame(meta.copy()).transpose()
+            col = meta.ease_col
+            row = meta.ease_row
+
+            gpi = lonlat2gpi(meta.lon, meta.lat, gpi_list)
+
+            ts_ascat = ascat.read(gpi) / 100 * 0.6
+            if ts_ascat is None:
+                continue
+
+            for mode in modes:
+                for var in variables:
+
+                    tmp = statlist[(statlist.network==meta.network)&(statlist.station==meta.station)]
+                    dpr = tmp[f'diff_pearsonr2_{mode}_{var}'].values[0]
+                    dtr = tmp[f'diff_tcar2_{mode}_{var}'].values[0]
+
+                    if not ((dtr < 0) & (dpr > 0)):
+                        continue
+
+                    if mode == 'absolute':
+                        ts_asc = ts_ascat.dropna()
+                    else:
+                        ts_asc = calc_anom(ts_ascat, longterm=(mode == 'longterm')).dropna()
+                    ts_asc.name = 'ascat'
+                    ts_asc = pd.DataFrame(ts_asc)
+
+                    if mode == 'absolute':
+                        ts_ins = ts_insitu[var].dropna()
+                    else:
+                        ts_ins = calc_anom(ts_insitu[var], longterm=(mode == 'longterm')).dropna()
+                    ts_ins.name = 'insitu'
+                    ts_ins = pd.DataFrame(ts_ins)
+
+                    ind = (ds_ol['snow_mass'].isel(lat=row, lon=col).values == 0) & \
+                          (ds_ol['soil_temp_layer1'].isel(lat=row, lon=col).values > 277.15)
+                    ts_ol = ds_ol[var].isel(lat=row, lon=col).to_series().loc[ind]
+                    ts_ol.index += pd.to_timedelta('2 hours')
+                    ind_obs = np.bitwise_or.reduce(~np.isnan(ts_ana[:, :, row, col].values), 1)
+                    if mode == 'absolute':
+                        ts_ol = ts_ol.reindex(t_ana[ind_obs]).dropna()
+                    else:
+                        ts_ol = calc_anom(ts_ol.reindex(t_ana[ind_obs]), longterm=(mode == 'longterm')).dropna()
+                    ts_ol.name = 'open_loop'
+                    ts_ol = pd.DataFrame(ts_ol)
+
+                    ind = (ds_da['snow_mass'].isel(lat=row, lon=col).values == 0) & \
+                          (ds_da['soil_temp_layer1'].isel(lat=row, lon=col).values > 277.15)
+                    ts_da = ds_da[var].isel(lat=row, lon=col).to_series().loc[ind]
+                    ts_da.index += pd.to_timedelta('2 hours')
+                    ind_obs = np.bitwise_or.reduce(~np.isnan(ts_ana[:, :, row, col].values), 1)
+                    if mode == 'absolute':
+                        ts_da = ts_da.reindex(t_ana[ind_obs]).dropna()
+                    else:
+                        ts_da = calc_anom(ts_da.reindex(t_ana[ind_obs]), longterm=(mode == 'longterm')).dropna()
+                    ts_da.name = 'DA_4K'
+                    ts_da = pd.DataFrame(ts_da)
+
+                    matched = df_match(ts_ol, ts_da, ts_asc, ts_ins, window=0.5)
+                    data = ts_ol.join(matched[0]['DA_4K']).join(matched[1]['ascat']).join(matched[2]['insitu']).dropna()
+
+                    dpr_triplets = data.corr()['DA_4K']['insitu'] - data.corr()['open_loop']['insitu']
+                    if dpr_triplets < 0:
+                        continue
+
+                    f = plt.figure(figsize=(15, 5))
+                    sns.lineplot(data=data[['open_loop', 'DA_4K', 'insitu']], dashes=False, linewidth=1.5, axes=plt.gca())
+                    plt.title(f'{meta.network} / {meta.station} ({var}): d(Pearson R2) = {dpr_triplets:.3f} , d(TCA R2) = {dtr:.3f}')
+
+                    fbase = Path('/Users/u0116961/Documents/work/MadKF/CLSM/suspicious_stations/timeseries')
+                    fname = fbase / f'{mode}_{var}_{meta.network}_{meta.station}.png'
+                    f.savefig(fname, dpi=300, bbox_inches='tight')
+                    plt.close()
+
+        except:
+            continue
 
 def plot_ismn_statistics_v3(root):
 
@@ -355,18 +566,30 @@ def plot_ismn_statistics_v3(root):
     variables = ['sm_surface', 'sm_rootzone']
     var_labels = ['surface', 'root-zone']
 
-    runs = ['noDA', 'DA_const_err','DA_madkf']
-    run_labels = ['Open Loop', 'EnKF (const. err.)','MadKF']
-    offsets = [-0.2, 0.0, 0.2]
-    cols = ['lightblue', 'lightgreen', 'coral']
+    runs =  ['open_loop', 'DA_4K_obserr'] + \
+            [f'SMAP_it{i}{j}' for j in  range(1,4) for i in  range(1,5)]
+
+    run_labels = ['Open Loop', 'EnKF (4K err.)'] + \
+                 [f'MadKF iter. {i}{j}' for j in  range(1,4) for i in range(1,5) ]
+
+    n_runs = len(runs)
+    offsets = np.linspace(-0.5 + 1/(n_runs+1), 0.5 - 1/(n_runs+1),n_runs)
+    cols = ['darkred', 'coral',
+            'navy', 'mediumblue', 'slateblue', 'lightblue',
+            'darkgreen', 'forestgreen', 'limegreen', 'lightgreen',
+            'rebeccapurple', 'blueviolet', 'mediumorchid', 'plum']
+
+    width = (offsets[1]- offsets[0]) / 2.5
+    ss = offsets[1] - offsets[0]
+
+    # offsets = [-0.2, 0.0, 0.2]
+    # cols = ['lightblue', 'lightgreen', 'coral']
     fontsize = 16
 
-    # networks  = ['SCAN', 'USCRN']
-    # title = ', '.join(networks)
-    # res = res.loc[res.index.isin(networks),:]
-    # res2 = res2.loc[res2.index.isin(networks),:]
-
-    f = plt.figure(figsize=(14,8))
+    networks  = ['SCAN', 'USCRN']
+    title = ', '.join(networks)
+    res = res.loc[res.index.isin(networks),:]
+    res2 = res2.loc[res2.index.isin(networks),:]
 
     titles = ['ubRMSD', 'ubRMSE', 'Pearson R$^2$ ', 'TCA R$^2$']
 
@@ -375,54 +598,64 @@ def plot_ismn_statistics_v3(root):
              [0.0, 1.0],
              [0.0, 1.0]]
 
-    valss = [[[res2['ubrmsd_' + run + '_absolute_' + var].values for run in runs] for var in variables],
-             [[res['ubRMSE_model_' + run + '_absolute_' + var].values for run in runs] for var in variables],
-             [[res2['corr_' + run + '_absolute_' + var].values ** 2 for run in runs] for var in variables],
-             [[res['R2_model_' + run + '_absolute_' + var].values for run in runs] for var in variables]]
+    modes = ['absolute', 'longterm', 'shortterm']
 
-    for n, (vals, tit, ylim) in enumerate(zip(valss, titles, ylims)):
+    for mode in modes:
 
-        ax = plt.subplot(2,2,n+1)
+        f = plt.figure(figsize=(20,8))
 
-        plt.grid(color='k', linestyle='--', linewidth=0.25)
+        valss = [[[res2[f'ubrmsd_{run}_{mode}_{var}'].values for run in runs] for var in variables],
+                 [[res[f'ubRMSE_model_{run}_{mode}_{var}'].values for run in runs] for var in variables],
+                 [[res2[f'corr_{run}_{mode}_{var}'].values ** 2 for run in runs] for var in variables],
+                 [[res[f'R2_model_{run}_{mode}_{var}'].values for run in runs] for var in variables]]
 
-        data = list()
-        ticks = list()
-        pos = list()
-        colors = list()
+        for n, (vals, tit, ylim) in enumerate(zip(valss, titles, ylims)):
 
-        for i, (val, var_label) in enumerate(zip(vals,var_labels)):
+            ax = plt.subplot(2,2,n+1)
 
-            ticks.append(var_label)
-            for col,offs, v in zip(cols,offsets,val):
-                tmp_data = v
-                tmp_data = tmp_data[~np.isnan(tmp_data)]
-                data.append(tmp_data)
-                pos.append(i+1 + offs)
-                colors.append(col)
+            plt.grid(color='k', linestyle='--', linewidth=0.25)
 
-        box = ax.boxplot(data, whis=[5,95], showfliers=False, positions=pos, widths=0.1, patch_artist=True)
-        for patch, color in zip(box['boxes'], colors):
-            patch.set(color='black', linewidth=2)
-            patch.set_facecolor(color)
-        for patch in box['medians']:
-            patch.set(color='black', linewidth=2)
-        for patch in box['whiskers']:
-            patch.set(color='black', linewidth=1)
-        plt.xticks(np.arange(len(var_labels))+1, ticks,fontsize=fontsize)
-        plt.yticks(fontsize=fontsize)
-        plt.xlim(0.5,len(ticks)+0.5)
-        plt.ylim(ylim)
-        for k in np.arange(len(var_labels)):
-            plt.axvline(k+0.5, linewidth=1, color='k')
-        if n == 1:
-            plt.figlegend((box['boxes'][0:4]),run_labels,'upper right',fontsize=fontsize-4)
-        ax.set_title(tit ,fontsize=fontsize)
+            data = list()
+            ticks = list()
+            pos = list()
+            colors = list()
 
-    fout = root / 'plots' / 'ismn_stats.png'
-    f.savefig(fout, dpi=300, bbox_inches='tight')
-    plt.close()
+            for i, (val, var_label) in enumerate(zip(vals,var_labels)):
 
+                ticks.append(var_label)
+                for col,offs, v in zip(cols,offsets,val):
+                    tmp_data = v
+                    tmp_data = tmp_data[~np.isnan(tmp_data)]
+                    data.append(tmp_data)
+                    pos.append(i+1 + offs)
+                    colors.append(col)
+
+            box = ax.boxplot(data, whis=[5,95], showfliers=False, positions=pos, widths=width, patch_artist=True)
+            for patch, color in zip(box['boxes'], colors):
+                patch.set(color='black', linewidth=2)
+                patch.set_facecolor(color)
+            for patch in box['medians']:
+                patch.set(color='black', linewidth=2)
+            for patch in box['whiskers']:
+                patch.set(color='black', linewidth=1)
+            plt.xticks(np.arange(len(var_labels))+1, ticks,fontsize=fontsize)
+            plt.yticks(fontsize=fontsize)
+            plt.xlim(0.5,len(ticks)+0.5)
+            plt.ylim(ylim)
+            for k in np.arange(len(var_labels)):
+                plt.axvline(k+0.5, linewidth=1.5, color='k')
+                plt.axvline(k+1 - 5*ss, linewidth=1, color='k', linestyle='--')
+                plt.axvline(k+1 - 1*ss, linewidth=1, color='k', linestyle='--')
+                plt.axvline(k+1 + 3*ss, linewidth=1, color='k', linestyle='--')
+            if n == 1:
+                plt.figlegend((box['boxes'][0:n_runs]),run_labels,'upper right',fontsize=fontsize-4)
+            ax.set_title(tit ,fontsize=fontsize)
+
+        fout = root / 'plots' / f'ismn_stats_{mode}.png'
+        f.savefig(fout, dpi=300, bbox_inches='tight')
+        plt.close()
+
+    # plt.tight_layout()
     # plt.show()
 
 
@@ -562,12 +795,12 @@ def plot_ts(lon, lat):
 
 if __name__=='__main__':
 
-    iteration = 3
+    iteration = 4
     # root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
-    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SMAP/validation/iter_{iteration}')
+    root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/validation')
 
-    if not (root / 'plots').exists():
-        Path.mkdir((root / 'plots'), parents=True)
+    # if not (root / 'plots').exists():
+    #     Path.mkdir((root / 'plots'), parents=True)
 
 
     # exp = 'US_M36_SMAP_TB_DA_scl_SMOSSMAP_short'
@@ -583,7 +816,12 @@ if __name__=='__main__':
     # plot_ismn_statistics(root)
     # plot_ismn_statistics_v2()
     # plot_ismn_statistics_v3(root)
-    plot_filter_diagnostics(root, iteration)
+
+    # find_suspicious_stations(root)
+    plot_suspicious_stations(root)
+
+    # plot_filter_diagnostics(root, iteration)
+    # plot_filter_diagnostics_violins(root)
 
     # plot_improvement_vs_uncertainty_update(iteration)
 

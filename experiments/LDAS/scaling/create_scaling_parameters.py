@@ -87,17 +87,18 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     sensor, date_from, date_to = args
 
     exp_smos = 'US_M36_SMOS40_TB_OL_noScl'
-    exp_smap = 'US_M36_SMAP_TB_OL_noScl'
+    exp_smap = 'NLv4_M36_US_SMAP_TB_OL'
 
-    froot = Path(f'/Users/u0116961/data_sets/LDASsa_runs/scaling_files')
+    ext = '_yearly' if mode == 'shortterm' else ''
+    froot = Path(f'/Users/u0116961/data_sets/GEOSldas_runs/scaling_files_Pcorr{ext}')
     if not froot.exists():
         Path.mkdir(froot, parents=True)
 
     ios = []
-    if 'SMOS' in sensor:
-        ios += [LDAS_io('ObsFcstAna', exp=exp_smos)]
     if 'SMAP' in sensor:
         ios += [LDAS_io('ObsFcstAna', exp=exp_smap)]
+    if 'SMOS' in sensor:
+        ios += [LDAS_io('ObsFcstAna', exp=exp_smos, root='/Users/u0116961/data_sets/LDASsa_runs')]
 
     if not date_from:
         date_from = pd.to_datetime(np.min([io.timeseries['time'].values[0] for io in ios]))
@@ -107,7 +108,6 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
         date_to = pd.to_datetime(np.max([io.timeseries['time'].values[-1] for io in ios]))
     else:
         date_to = pd.to_datetime(date_to)
-
     pent_from = int(np.floor((date_from.dayofyear - 1) / 5.) + 1)
     pent_to = int(np.floor((date_to.dayofyear - 1) / 5.) + 1)
     sub = '_PCA' if (use_pc and (sensor == 'SMOSSMAP')) else ''
@@ -136,7 +136,7 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                   'orbit': orbits[0]}
         darr = xr.DataArray(dummy, coords=coords, dims=['tile_id','pentad','angle','pol','orbit'])
     else:
-        years = np.arange(2010, 2017)
+        years = np.arange(date_from.year, date_to.year+1)
         dummy = np.full([len(tiles), len(pentads), len(years), len(angles), len(pols), len(orbits[0])], -9999)
         coords = {'tile_id': tiles,
                   'pentad': pentads,
@@ -190,10 +190,10 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                     else:
                         for yr in years:
                             data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
-                            data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(obs[date_from:date_to][obs.index.year==yr]).values
+                            data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(obs[obs.index.year==yr][date_from:date_to])
                             data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
-                            data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(mod[date_from:date_to][obs.index.year==yr]).values
-                            data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = len(obs[obs[date_from:date_to].index.year==yr].dropna())
+                            data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(mod[mod.index.year==yr][date_from:date_to])
+                            data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = len(obs[obs.index.year==yr][date_from:date_to].dropna())
 
     modes = np.array([0, 0])
     sdate = np.array([date_from.year, date_from.month, date_from.day, 0, 0])
@@ -243,11 +243,10 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                     ios[0].write_fortran_block(fid, sdate)
                     ios[0].write_fortran_block(fid, edate)
                     ios[0].write_fortran_block(fid, lengths)
-                    ios[0].write_fortran_block(fid, angles)
+                    ios[0].write_fortran_block(fid, angles.astype('float'))  # required by LDASsa!!
                     for f in res.columns.values:
                         ios[0].write_fortran_block(fid, res[f].values)
                     fid.close()
-
 
 def replace_orbit_field():
     '''
@@ -275,7 +274,7 @@ def replace_angle_field():
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    args = ('SMOS', '2009-04-01', '2015-04-01')
-    run(args, scale_target='SMOS')
+    args = ('SMOSSMAP', '2015-04-01', '2020-04-01')
+    run(args, scale_target='SMAP', mode='longterm')
 
     # replace_angle_field()

@@ -139,6 +139,7 @@ class ISMN_io(object):
                              'sm_rootzone':pd.DataFrame(root).mean(axis=1),
                              'sm_profile':pd.DataFrame(prof).mean(axis=1)})
         df.index = pd.DatetimeIndex(df.index).tz_localize(None)
+        df.index.name = None
         return df
 
     def iter_stations(self, surf_depth=0.1, surface_only=True):
