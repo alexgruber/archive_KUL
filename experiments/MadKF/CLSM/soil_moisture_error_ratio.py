@@ -9,13 +9,42 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 sns.set_context('talk', font_scale=0.8)
 
-from pyldas.interface import LDAS_io
-from pyldas.templates import template_error_Tb40
+# from pyldas.interface import GEOSldas_io, LDASsa_io
+# from pyldas.templates import template_error_Tb40
 
-from validation_good_practice.plots import plot_ease_img
-from validation_good_practice.ancillary.grid import Paths
-from myprojects.experiments.MadKF.CLSM.ensemble_covariance import fill_gaps, plot_ease_img2
+# from validation_good_practice.plots import plot_ease_img
+# from validation_good_practice.ancillary.grid import Paths
+# from myprojects.experiments.MadKF.CLSM.ensemble_covariance import fill_gaps, plot_ease_img2
 
+def plot_potential_skillgain():
+
+    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
+
+    modes = ['abs', 'anom_lst', 'anom_lt', 'anom_st']
+
+    f = plt.figure(figsize=(15,8))
+
+    for i, mode in enumerate(modes):
+
+        R = res[f'ubrmse_grid_{mode}_m_SMAP_tc_ASCAT_SMAP_CLSM']**2
+        P = res[f'ubrmse_grid_{mode}_m_CLSM_tc_ASCAT_SMAP_CLSM']**2
+
+        R2 = res[f'r2_grid_{mode}_m_CLSM_tc_ASCAT_SMAP_CLSM']
+
+        K = P / (R + P)
+        NSR = (1 - R2) / R2
+
+        R2upd = 1 / (1 + (1 - K) * NSR)
+
+        res['gain_pot'] = R2upd - R2
+
+        plt.subplot(2, 2, i+1)
+        plot_ease_img(res, 'gain_pot', fontsize=12, cbrange=[0,0.4], cmap='YlGn', log_scale=False, title=mode, plot_cb=True)
+
+
+    fout = f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots/skillgain_pot_noPcorr.png'
+    f.savefig(fout, dpi=300, bbox_inches='tight')
+    plt.close()
 
 def plot_kalman_gains():
 
@@ -70,12 +99,12 @@ def plot_K_vs_r_p_ratio():
 
 def create_observation_perturbations():
 
-    froot = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/')
+    froot = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas')
     fbase = 'SMOS_fit_Tb_'
 
-    pc = 'noPcorr'
+    pc = 'Pcorr'
 
-    io = LDAS_io()
+    io = GEOSldas_io()
 
     ensvar = pd.read_csv(froot / 'ens_vars' / pc / 'ens_var.csv', index_col=0)
     obs_err = ensvar[['col', 'row']]
@@ -90,8 +119,7 @@ def create_observation_perturbations():
           'anom_lst': [(1,0)],
           'anom_st':[(1,0)]}
 
-    # ks = {'anom_lt': [(1,0)],
-    #       'anom_st':[(0.8,0), (1,0), (1.5,0)]}
+    # ks = {'abs': [(1,0)]}
 
     for mode, k in ks.items():
 
@@ -159,49 +187,55 @@ def create_observation_perturbations():
 
 def plot_perturbations():
 
-    root = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio')
+    root = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/')
+
+    pc = 'noPcorr'
+
+    io = GEOSldas_io('ObsFcstAna')
 
     lut = pd.read_csv(Paths().lut, index_col=0)
-    ind = np.vectorize(LDAS_io().grid.colrow2tilenum)(lut.ease2_col, lut.ease2_row, local=False)
+    ind = np.vectorize(io.grid.colrow2tilenum)(lut.ease2_col, lut.ease2_row, local=False)
 
-    for mode in ['anom_lt', 'anom_st']:
-        for i in np.arange(1,2):
+    for mode in ['abs', 'anom_lst', 'anom_lt', 'anom_st']:
+    # for mode in ['abs']:
 
-            fA = root / 'observation_perturbations' / f'{mode}_{i}' / 'SMOS_fit_Tb_A.bin'
-            fD = root / 'observation_perturbations' / f'{mode}_{i}' / 'SMOS_fit_Tb_D.bin'
+        fA = root / 'observation_perturbations' / f'{pc}' / f'{mode}' / 'SMOS_fit_Tb_A.bin'
+        fD = root / 'observation_perturbations' / f'{pc}' / f'{mode}' / 'SMOS_fit_Tb_D.bin'
 
-            dir_out = root / 'plots' / 'obs_pert'
-            if not dir_out.exists():
-                Path.mkdir(dir_out)
+        dir_out = root / 'plots' / 'obs_pert' / f'{pc}'
+        if not dir_out.exists():
+            Path.mkdir(dir_out, parents=True)
 
-            dtype, hdr, length = template_error_Tb40()
+        dtype, hdr, length = template_error_Tb40()
 
-            io = LDAS_io('ObsFcstAna')
+        imgA = io.read_fortran_binary(fA, dtype, hdr=hdr, length=length)
+        imgD = io.read_fortran_binary(fD, dtype, hdr=hdr, length=length)
 
-            imgA = io.read_fortran_binary(fA, dtype, hdr=hdr, length=length)
-            imgD = io.read_fortran_binary(fD, dtype, hdr=hdr, length=length)
+        imgA.index += 1
+        imgD.index += 1
 
-            imgA.index += 1
-            imgD.index += 1
+        cbrange = [0,15]
 
-            cbrange = [0,15]
+        plt.figure(figsize=(19, 11))
 
-            plt.figure(figsize=(19, 11))
+        plt.subplot(221)
+        plot_ease_img2(imgA.reindex(ind),'err_Tbh', cbrange=cbrange, title='H-pol (Asc.)', io=io)
+        plt.subplot(222)
+        plot_ease_img2(imgA.reindex(ind),'err_Tbv', cbrange=cbrange, title='V-pol (Asc.)', io=io)
+        plt.subplot(223)
+        plot_ease_img2(imgD.reindex(ind),'err_Tbh', cbrange=cbrange, title='H-pol (Dsc.)', io=io)
+        plt.subplot(224)
+        plot_ease_img2(imgD.reindex(ind),'err_Tbv', cbrange=cbrange, title='V-pol (Dsc.)', io=io)
 
-            plt.subplot(221)
-            plot_ease_img2(imgA.reindex(ind),'err_Tbh', cbrange=cbrange, title='H-pol (Asc.)', io=io)
-            plt.subplot(222)
-            plot_ease_img2(imgA.reindex(ind),'err_Tbv', cbrange=cbrange, title='V-pol (Asc.)', io=io)
-            plt.subplot(223)
-            plot_ease_img2(imgD.reindex(ind),'err_Tbh', cbrange=cbrange, title='H-pol (Dsc.)', io=io)
-            plt.subplot(224)
-            plot_ease_img2(imgD.reindex(ind),'err_Tbv', cbrange=cbrange, title='V-pol (Dsc.)', io=io)
-
-            plt.savefig(dir_out / f'{mode}_{i}.png', dpi=300, bbox_inches='tight')
-            plt.close()
+        plt.savefig(dir_out / f'{mode}.png', dpi=300, bbox_inches='tight')
+        plt.close()
 
 if __name__=='__main__':
 
     # plot_kalman_gains()
-    create_observation_perturbations()
+    # create_observation_perturbations()
     # plot_perturbations()
+
+    plot_K_vs_r_p_ratio()
+
+    # plot_potential_skillgain()

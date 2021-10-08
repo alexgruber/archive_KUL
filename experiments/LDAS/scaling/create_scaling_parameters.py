@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from pytesmo.temporal_matching import df_match
 
 from pyldas.grids import EASE2
-from pyldas.interface import LDAS_io
+from pyldas.interface import GEOSldas_io
 from pyldas.templates import template_scaling
 from pyldas.visualize.plots import plot_ease_img
 
@@ -86,19 +86,21 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
 
     sensor, date_from, date_to = args
 
-    exp_smos = 'US_M36_SMOS40_TB_OL_noScl'
-    exp_smap = 'NLv4_M36_US_SMAP_TB_OL'
+    pc = 'Pcorr'
+
+    exp_smap = f'NLv4_M36_US_OL_{pc}'
+    exp_smos = f'NLv4_M36_US_OL_{pc}_SMOS'
 
     ext = '_yearly' if mode == 'shortterm' else ''
-    froot = Path(f'/Users/u0116961/data_sets/GEOSldas_runs/scaling_files_Pcorr{ext}')
+    froot = Path(f'~/data_sets/GEOSldas_runs/_scaling_files_{pc}{ext}').expanduser()
     if not froot.exists():
         Path.mkdir(froot, parents=True)
 
     ios = []
     if 'SMAP' in sensor:
-        ios += [LDAS_io('ObsFcstAna', exp=exp_smap)]
+        ios += [GEOSldas_io('ObsFcstAna', exp=exp_smap)]
     if 'SMOS' in sensor:
-        ios += [LDAS_io('ObsFcstAna', exp=exp_smos, root='/Users/u0116961/data_sets/LDASsa_runs')]
+        ios += [GEOSldas_io('ObsFcstAna', exp=exp_smos)]
 
     if not date_from:
         date_from = pd.to_datetime(np.min([io.timeseries['time'].values[0] for io in ios]))
@@ -161,7 +163,8 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                     col, row = ios[0].grid.tileid2colrow(til)
                     if sensor.upper() == 'SMOSSMAP':
                         spcs = [io.get_species(pol=pol, ang=ang, orbit=orb) for io, orb in zip(ios,[orb1, orb2])]
-                        orb = orb2 if scale_target == 'SMAP' else orb1
+                        # orb = orb2 if scale_target == 'SMAP' else orb1 # POSSIBLY WRONG!!!!
+                        orb = orb1 if scale_target == 'SMAP' else orb2
                     else:
                         spcs = [ios[0].get_species(pol=pol, ang=ang, orbit=orb1)]
                         if sensor.upper() == 'SMAP':

@@ -7,10 +7,9 @@ import pandas as pd
 
 from pathlib import Path
 
-from ismn.readers import read_data
-from ismn.metadata_collector import collect_from_folder
 
-from pyldas.interface import LDAS_io
+from ismn.interface import ISMN_Interface
+from pyldas.interface import GEOSldas_io
 
 class ISMN_io(object):
 
@@ -20,135 +19,78 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-            self.root = Path('~/data_sets/ISMN_CONUS_20070101_20200101').expanduser()
+            self.root = Path('~/data_sets/ISMN/CONUS_20150401_20200401_downloaded_20210920').expanduser()
         else:
             self.root = Path(path)
 
-        self.meta_file = self.root / 'meta.bin'
-        if not self.meta_file.exists():
-            print('Meta file does not exist.')
-            self.meta = None
-        else:
-            f = open(self.meta_file, 'rb')
-            self.meta = pickle.load(f)
-            f.close()
+        self.io = ISMN_Interface(self.root)
 
         self.list_file = self.root / 'station_list.csv'
         if not self.list_file.exists():
             print('Station list does not exist.')
+            self.generate_station_list()
         else:
             self.list = pd.read_csv(self.list_file, index_col=0)
-            self.list['ease_col'] -= self.col_offs
-            self.list['ease_row'] -= self.row_offs
-
-    def generate_meta_file(self):
-
-        self.meta = collect_from_folder(self.root)
-
-        f = open(self.meta_file, 'wb')
-        pickle.dump(self.meta, f)
-        f.close()
 
     def generate_station_list(self):
 
-        if self.meta is None:
-            print('Generating meta file...')
-            self.generate_meta_file()
+        tmplist = self.io.metadata[[('network','val'),('station','val'),('latitude','val'),('longitude','val')]]
+        tmplist.columns = tmplist.columns.droplevel('key')
+        tmplist.columns.name = None
 
-        unique, ind = np.unique(self.meta['network'] + self.meta['station'], return_index=True)
+        tmplist = tmplist.iloc[np.unique(tmplist.network+tmplist.station, return_index=True)[1]]
+        tmplist.index = np.arange(len(tmplist))
 
-        self.list = pd.DataFrame({'network': self.meta[ind]['network'], 'station': self.meta[ind]['station'],
-                                  'lat': self.meta[ind]['latitude'], 'lon': self.meta[ind]['longitude']})
-
-        grid = LDAS_io().grid
+        grid = GEOSldas_io().grid
         vfindcolrow = np.vectorize(grid.lonlat2colrow)
-        col, row = vfindcolrow(self.list.lon.values, self.list.lat.values)
-        self.list['ease_col'] = col
-        self.list['ease_row'] = row
+        col, row = vfindcolrow(tmplist.longitude.values, tmplist.latitude.values)
+        tmplist['ease_col'] = col
+        tmplist['ease_row'] = row
 
-        self.list['ease_col'] -= self.col_offs
-        self.list['ease_row'] -= self.row_offs
-        self.list.to_csv(self.list_file)
+        tmplist['ease_col'] -= self.col_offs
+        tmplist['ease_row'] -= self.row_offs
 
-    def read_first_surface_layer(self, network, station, var='soil moisture', surf_depth=0.1):
+        tmplist.to_csv(self.list_file)
+        self.list = tmplist
 
-        tmp_meta = self.meta[(self.meta['network'] == network) & (self.meta['station'] == station)]
-        tmp_meta = tmp_meta[tmp_meta['variable'] == var]
-        if len(tmp_meta) == 0:
-            return None
-        tmp_meta = tmp_meta[tmp_meta['depth_from'] == min(tmp_meta['depth_from'])]
-        if len(tmp_meta) > 1:
-            tmp_meta = tmp_meta[tmp_meta['depth_to'] == min(tmp_meta['depth_to'])]
-        if len(tmp_meta) > 1:
-            tmp_meta = tmp_meta[0]
-        if tmp_meta['depth_from'] > surf_depth:
-            return None
 
-        try:
-            if len(tmp_meta['filename']) == 1:
-                tmp_data = read_data(tmp_meta['filename'][0]).data
+    def read(self, network, station, surface_depth=0.1, surface_only=False):
+
+        names = ['sm_surface']
+        depths = [[0, surface_depth]]
+
+        if not surface_only:
+            names += ['sm_rootzone', 'sm_profile']
+            depths += [[surface_depth,1],[0,1]]
+
+        tss = []
+        for name, depth in zip(names,depths):
+            tmp_tss = []
+            for data in self.io[network][station].iter_sensors(variable='soil_moisture', depth=depth):
+                ts = data.read_data()
+                tmp_tss += [ts[ts['soil_moisture_flag'] == 'G']['soil_moisture']]
+            if len(tmp_tss) > 0:
+                ts = pd.concat(tmp_tss, axis=1)
+                ts = ts.mean(axis=1)
+                ts.name = name
             else:
-                tmp_data = read_data(tmp_meta['filename']).data
-        except:
-            print('Data could not be read from ' + tmp_meta['filename'])
-            return None
+                ts = pd.Series(name=name)
+            tss += [ts]
 
-        tmp_data = pd.Series(tmp_data[tmp_data[var + '_flag'] == 'G'][var])
-        if len(tmp_data) < 10:
-            return None
-        tmp_data.name = 'insitu'
-        tmp_data.index = pd.DatetimeIndex(tmp_data.index).tz_localize(None)
+        res = pd.concat(tss, axis=1)
 
-        return tmp_data
+        if len(res) > 0:
+            res.index = pd.DatetimeIndex(res.index)
+            res = res.resample('6h').mean()
 
-    def read(self, network, station, var='soil moisture', surf_depth=0.05):
+        return res
 
-        meta = self.meta[(self.meta['network'] == network) & \
-                         (self.meta['station'] == station) & \
-                         (self.meta['variable'] == var)]
 
-        surf_files = meta[meta['depth_to'] <= surf_depth]['filename']
-        root_files = meta[meta['depth_to'] <= 1.00]['filename']
-        prof_files = meta['filename']
 
-        surf = dict()
-        for i,f in enumerate(surf_files):
-            try:
-                ts = read_data(f).data
-                surf[i] = ts[ts[var + '_flag'] == 'G'][var].resample('3h',label='right',closed='right').mean().dropna()
-            except:
-                continue
+    def iter_stations(self, surface_depth=0.1, surface_only=True):
 
-        root = dict()
-        for i,f in enumerate(root_files):
-            try:
-                ts = read_data(f).data
-                root[i] = ts[ts[var + '_flag'] == 'G'][var].resample('3h',label='right',closed='right').mean().dropna()
-            except:
-                continue
-
-        prof = dict()
-        for i,f in enumerate(prof_files):
-            try:
-                ts = read_data(f).data
-                prof[i] = ts[ts[var + '_flag'] == 'G'][var].resample('3h',label='right',closed='right').mean().dropna()
-            except:
-                continue
-
-        df = pd.DataFrame({'sm_surface':pd.DataFrame(surf).mean(axis=1),
-                             'sm_rootzone':pd.DataFrame(root).mean(axis=1),
-                             'sm_profile':pd.DataFrame(prof).mean(axis=1)})
-        df.index = pd.DatetimeIndex(df.index).tz_localize(None)
-        df.index.name = None
-        return df
-
-    def iter_stations(self, surf_depth=0.1, surface_only=True):
-
-        for idx,station in self.list.iterrows():
-            if surface_only is True:
-                yield station, self.read_first_surface_layer(station.network, station.station, surf_depth=surf_depth)
-            else:
-                yield station, self.read(station.network, station.station, surf_depth=surf_depth)
+        for idx, station in self.list.iterrows():
+            yield station, self.read(station.network, station.station, surface_depth=surface_depth)
 
 
 if __name__=='__main__':

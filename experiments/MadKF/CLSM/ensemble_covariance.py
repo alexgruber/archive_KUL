@@ -12,7 +12,7 @@ from matplotlib.colors import LogNorm
 from pathlib import Path
 from multiprocessing import Pool
 
-from pyldas.interface import LDAS_io
+from pyldas.interface import GEOSldas_io
 from pyldas.templates import template_error_Tb40
 
 from sklearn.experimental import enable_iterative_imputer
@@ -85,19 +85,19 @@ def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
 def calc_ens_var(root):
 
-    resdir = root / 'ens_vars' / 'noPcorr_scl_seas'
+    resdir = root / 'ens_vars' / 'noPcorr'
 
     if not resdir.exists():
         Path.mkdir(resdir, parents=True)
 
-    exp_ol = 'US_M36_SMAP_TB_OL_scaled_noPcorr'
-    exp_da = 'US_M36_SMAP_TB_DA_scaled_4K_obserr'
+    exp_ol = 'NLv4_M36_US_OL_noPcorr_SMAP'
+    exp_da = 'NLv4_M36_US_OL_noPcorr_SMAP'
 
     # param = 'ObsFcstAnaEns'
     param = 'ObsFcstAna'
 
-    io_ol = LDAS_io(param, exp_ol)
-    io_da = LDAS_io(param, exp_da)
+    io_ol = GEOSldas_io(param, exp_ol)
+    io_da = GEOSldas_io(param, exp_da)
 
     res = pd.DataFrame(index=io_ol.grid.tilecoord.index.values,
                        columns=['col', 'row'] + [f'obs_var_spc{spc}' for spc in [1,2,3,4]] \
@@ -124,9 +124,12 @@ def calc_ens_var(root):
             # res.loc[idx,f'fcst_var_spc{spc}'] = ts_fcst.var(axis='columns').mean()
             # res.loc[idx,f'ana_var_spc{spc}'] = ts_ana.var(axis='columns').mean()
 
-            res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_obsvar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
+            # res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
+            res.loc[idx,f'obs_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_obsvar'][:,spc-1,row,col].values)
             res.loc[idx,f'fcst_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
-            res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_da.timeseries['obs_anavar'][:,spc-1,row,col].values)
+            res.loc[idx,f'ana_var_spc{spc}'] = np.nanmean(io_ol.timeseries['obs_fcstvar'][:,spc-1,row,col].values)
 
     fname = resdir / 'ens_var.csv'
 
@@ -808,7 +811,7 @@ def process_iteration(curr_it):
     # calc_tb_mse(root, curr_it, anomaly=anomaly, longterm=longterm)
     #
 
-    root = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio').expanduser()
+    root = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas').expanduser()
     calc_ens_var(root)
     # calc_ens_cov(root, curr_it)
     # correct_mse(root, last_it)
