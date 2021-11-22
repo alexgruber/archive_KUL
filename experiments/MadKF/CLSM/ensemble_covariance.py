@@ -85,19 +85,19 @@ def calc_tb_mse(root, iteration, anomaly=False, longterm=False):
 
 def calc_ens_var(root):
 
-    resdir = root / 'ens_vars' / 'noPcorr'
+    resdir = root / 'ens_vars' / 'Pcorr'
 
     if not resdir.exists():
         Path.mkdir(resdir, parents=True)
 
-    exp_ol = 'NLv4_M36_US_OL_noPcorr_SMAP'
-    exp_da = 'NLv4_M36_US_OL_noPcorr_SMAP'
+    exp_ol = 'NLv4_M36_US_OL_Pcorr'
+    # exp_da = 'NLv4_M36_US_OL_Pcorr'
 
     # param = 'ObsFcstAnaEns'
     param = 'ObsFcstAna'
 
     io_ol = GEOSldas_io(param, exp_ol)
-    io_da = GEOSldas_io(param, exp_da)
+    # io_da = GEOSldas_io(param, exp_da)
 
     res = pd.DataFrame(index=io_ol.grid.tilecoord.index.values,
                        columns=['col', 'row'] + [f'obs_var_spc{spc}' for spc in [1,2,3,4]] \
@@ -214,6 +214,7 @@ def plot_ease_img2(data, tag,
                   cmap='jet',
                   title='',
                   fontsize=16,
+                  plot_cmap=True,
                   io=None):
 
     if io is None:
@@ -245,18 +246,20 @@ def plot_ease_img2(data, tag,
 
     im.set_clim(vmin=cbrange[0], vmax=cbrange[1])
 
-    cb = m.colorbar(im, "bottom", size="7%", pad="8%")
-
-    for t in cb.ax.get_xticklabels():
-        t.set_fontsize(fontsize)
-    for t in cb.ax.get_yticklabels():
-        t.set_fontsize(fontsize)
+    if plot_cmap:
+        cb = m.colorbar(im, "bottom", size="7%", pad="8%")
+        for t in cb.ax.get_xticklabels():
+            t.set_fontsize(fontsize)
+        for t in cb.ax.get_yticklabels():
+            t.set_fontsize(fontsize)
 
     if title != '':
         plt.title(title,fontsize=fontsize)
 
     x, y = m(-79, 25)
-    plt.text(x, y, 'mean = %.3f' % np.ma.mean(img_masked), fontsize=fontsize - 2)
+    plt.text(x, y, 'mean=%.2f' % np.ma.mean(img_masked), fontsize=fontsize - 5)
+
+    return im
 
 
 def plot_ease_img(data,tag,

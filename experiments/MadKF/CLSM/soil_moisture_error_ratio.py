@@ -6,19 +6,57 @@ import pandas as pd
 from pathlib import Path
 
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 sns.set_context('talk', font_scale=0.8)
+import colorcet as cc
 
-# from pyldas.interface import GEOSldas_io, LDASsa_io
-# from pyldas.templates import template_error_Tb40
+from pyldas.interface import GEOSldas_io, LDASsa_io
+from pyldas.templates import template_error_Tb40
 
-# from validation_good_practice.plots import plot_ease_img
-# from validation_good_practice.ancillary.grid import Paths
-# from myprojects.experiments.MadKF.CLSM.ensemble_covariance import fill_gaps, plot_ease_img2
+from validation_good_practice.plots import plot_ease_img
+from validation_good_practice.ancillary.grid import Paths
+from myprojects.experiments.MadKF.CLSM.ensemble_covariance import fill_gaps, plot_ease_img2
+
+def plot_TCA_reliability():
+
+    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+
+    modes = ['abs', 'anom_lst', 'anom_lt', 'anom_st']
+
+    f = plt.figure(figsize=(15,8))
+
+    cmap = mpl.cm.get_cmap("magma", 8)
+
+    for i, mode in enumerate(modes):
+
+        p_a_s = res[f'p_grid_{mode}_p_ASCAT_SMAP']
+        p_a_c = res[f'p_grid_{mode}_p_ASCAT_CLSM']
+        p_s_c = res[f'p_grid_{mode}_p_SMAP_CLSM']
+        r_a_s = res[f'r_grid_{mode}_p_ASCAT_SMAP']
+        r_a_c = res[f'r_grid_{mode}_p_ASCAT_CLSM']
+        r_s_c = res[f'r_grid_{mode}_p_SMAP_CLSM']
+
+        res[f'p_mask_{mode}'] = ((p_a_s <= 0.05)&(r_a_s > 0.2)) * 1 + \
+                                ((p_a_c <= 0.05)&(r_a_c > 0.2)) * 2 + \
+                                ((p_s_c <= 0.05)&(r_s_c > 0.2)) * 4
+
+        plt.subplot(2, 2, i+1)
+        plot_ease_img(res, f'p_mask_{mode}', fontsize=12, cbrange=[0,8], cmap=cmap, log_scale=False, title=mode, plot_cb=True)
+
+
+
+    plt.tight_layout()
+    plt.show()
+
+    # fout = f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots/skillgain_pot_Pcorr_simple.png'
+    # f.savefig(fout, dpi=300, bbox_inches='tight')
+    # plt.close()
+
 
 def plot_potential_skillgain():
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
+    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
 
     modes = ['abs', 'anom_lst', 'anom_lt', 'anom_st']
 
@@ -39,12 +77,94 @@ def plot_potential_skillgain():
         res['gain_pot'] = R2upd - R2
 
         plt.subplot(2, 2, i+1)
-        plot_ease_img(res, 'gain_pot', fontsize=12, cbrange=[0,0.4], cmap='YlGn', log_scale=False, title=mode, plot_cb=True)
+        plot_ease_img(res, 'gain_pot', fontsize=12, cbrange=[-0.2,0.2], cmap=cc.cm.bjy, log_scale=False, title=mode, plot_cb=True)
 
 
-    fout = f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots/skillgain_pot_noPcorr.png'
+    fout = f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots/skillgain_pot_Pcorr_simple.png'
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
+
+def plot_potential_skillgain_decomposed():
+
+    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+
+    R_abs = res[f'ubrmse_grid_abs_m_SMAP_tc_ASCAT_SMAP_CLSM']**2
+    P_abs = res[f'ubrmse_grid_abs_m_CLSM_tc_ASCAT_SMAP_CLSM']**2
+
+    R_anom_lt = res[f'ubrmse_grid_anom_lt_m_SMAP_tc_ASCAT_SMAP_CLSM']**2
+    P_anom_lt = res[f'ubrmse_grid_anom_lt_m_CLSM_tc_ASCAT_SMAP_CLSM']**2
+
+    R_anom_lst = res[f'ubrmse_grid_anom_lst_m_SMAP_tc_ASCAT_SMAP_CLSM']**2
+    P_anom_lst = res[f'ubrmse_grid_anom_lst_m_CLSM_tc_ASCAT_SMAP_CLSM']**2
+
+    R_anom_st = res[f'ubrmse_grid_anom_st_m_SMAP_tc_ASCAT_SMAP_CLSM']**2
+    P_anom_st = res[f'ubrmse_grid_anom_st_m_CLSM_tc_ASCAT_SMAP_CLSM']**2
+
+    R_clim = (R_abs - R_anom_lt - R_anom_st).abs()
+    P_clim = (P_abs - P_anom_lt - P_anom_st).abs()
+
+
+    # Baseline estimates
+    R2 = res[f'r2_grid_abs_m_CLSM_tc_ASCAT_SMAP_CLSM']
+    SNR = R2 / (1 - R2)
+    SIG = SNR * P_abs
+
+    modes = ['abs', 'anom_lt', 'anom_lst', 'anom_st']
+    result = pd.DataFrame(index=res.index, columns=modes)
+    result['row'] = res.row
+    result['col'] = res.col
+
+    for cnt, i in enumerate(res.index):
+        print(f'{cnt} / {len(res)}')
+
+        R11 = R_clim.loc[i]
+        R22 = R_anom_lt.loc[i]
+        R33 = R_anom_st.loc[i]
+        P11 = P_clim.loc[i]
+        P22 = P_anom_lt.loc[i]
+        P33 = P_anom_st.loc[i]
+
+        r_c_l = 0.2
+        r_c_s = 0.8
+        r_l_s = 0.2
+
+        R12 = r_c_l * np.sqrt(R11 * R22)
+        R13 = r_c_s * np.sqrt(R11 * R33)
+        R23 = r_l_s * np.sqrt(R22 * R33)
+        P12 = r_c_l * np.sqrt(P11 * P22)
+        P13 = r_c_s * np.sqrt(P11 * P33)
+        P23 = r_l_s * np.sqrt(P22 * P33)
+
+        S = np.matrix([[R11, R12, R13, 0,   0,   0  ],
+                       [R12, R22, R23, 0,   0,   0  ],
+                       [R13, R23, R33, 0,   0,   0  ],
+                       [0,   0,   0,   P11, P12, P13],
+                       [0,   0,   0,   P12, P22, P23],
+                       [0,   0,   0,   P13, P23, P33]])
+
+        for mode in modes:
+
+            P = res.loc[i, f'ubrmse_grid_{mode}_m_CLSM_tc_ASCAT_SMAP_CLSM'] ** 2
+            R = res.loc[i, f'ubrmse_grid_{mode}_m_SMAP_tc_ASCAT_SMAP_CLSM'] ** 2
+            K = P / (R + P)
+
+            A = np.matrix([K, K, K, 1-K, 1-K, 1-K])
+            P_upd = (A * S * A.T)[0,0]
+
+            NSR_upd = P_upd / SIG.loc[i]
+            R2upd = 1 / (1 + NSR_upd)
+
+            result.loc[i, mode] = R2upd - R2.loc[i]
+
+    f = plt.figure(figsize=(15,8))
+    for i, mode in enumerate(modes):
+        plt.subplot(2, 2, i+1)
+        plot_ease_img(result, mode, fontsize=12, cbrange=[-0.2,0.2], cmap=cc.cm.bjy, log_scale=False, title=mode, plot_cb=True)
+
+    fout = f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots/skillgain_pot_Pcorr_corr_asym.png'
+    f.savefig(fout, dpi=300, bbox_inches='tight')
+    plt.close()
+
 
 def plot_kalman_gains():
 
@@ -126,11 +246,11 @@ def create_observation_perturbations():
         tag_r = f'ubrmse_grid_{mode}_m_SMAP_tc_ASCAT_SMAP_CLSM'
         tag_p = f'ubrmse_grid_{mode}_m_CLSM_tc_ASCAT_SMAP_CLSM'
 
-        for i, (k_m, k_a) in enumerate(k):
+        dir_out = froot / 'observation_perturbations' / pc / mode
+        if not dir_out.exists():
+            Path.mkdir(dir_out, parents=True)
 
-            dir_out = froot / 'observation_perturbations' / pc / mode
-            if not dir_out.exists():
-                Path.mkdir(dir_out, parents=True)
+        for i, (k_m, k_a) in enumerate(k):
 
             scl = (tc_res[tag_r] * k_m + k_a)**2 / tc_res[tag_p]**2
 
@@ -157,7 +277,7 @@ def create_observation_perturbations():
 
             modes = np.array([0, 0])
             sdate = np.array([2015, 4, 1, 0, 0])
-            edate = np.array([2020, 4, 1, 0, 0])
+            edate = np.array([2021, 4, 1, 0, 0])
             lengths = np.array([len(template), len(angles)])  # tiles, incidence angles, whatever
 
             # ----- write output files -----
@@ -233,9 +353,12 @@ def plot_perturbations():
 if __name__=='__main__':
 
     # plot_kalman_gains()
-    # create_observation_perturbations()
+    create_observation_perturbations()
     # plot_perturbations()
 
-    plot_K_vs_r_p_ratio()
+    # plot_K_vs_r_p_ratio()
+
+    # plot_TCA_reliability()
 
     # plot_potential_skillgain()
+    # plot_potential_skillgain_decomposed()

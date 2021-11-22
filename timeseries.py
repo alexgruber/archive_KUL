@@ -54,7 +54,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False,
             climSer[years == yr] = clim[doys[years == yr]].values
 
     if output == 'climSer':
-        return climSer
+        return climSer.reindex(Ser.index)
 
     climSer.name = xSer.name
     return xSer - climSer

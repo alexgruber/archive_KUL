@@ -17,6 +17,7 @@ from scipy.stats import pearsonr
 import seaborn as sns
 sns.set_context('talk', font_scale=0.8)
 import matplotlib.pyplot as plt
+import colorcet as cc
 
 from pyldas.interface import GEOSldas_io
 
@@ -83,16 +84,16 @@ def run_ascat_eval_part(part, parts, ref='ascat'):
     names = ['OL_Pcorr', 'OL_noPcorr'] + \
             [f'DA_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
 
-    runs = ['NLv4_M36_US_OL_Pcorr_SMAP', 'NLv4_M36_US_OL_noPcorr_SMAP'] + \
-        [f'NLv4_M36_US_DA_{pc}_scl_SMAP_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
+    runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr' ] + \
+        [f'NLv4_M36_US_DA_SMAP_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
 
-    dss = [GEOSldas_io('tavg3_1d_lnr_Nt', run).timeseries for run in runs]
+    dss = [GEOSldas_io('tavg3_1d_lnr_Nt', run).timeseries if 'DA' in run else GEOSldas_io('SMAP_L4_SM_gph', run).timeseries for run in runs]
     grid = GEOSldas_io('ObsFcstAna', runs[0]).grid
 
-    ds_full = GEOSldas_io('SMAP_L4_SM_gph', 'NLv4_M36_US_OL_Pcorr_scl_SMAP').timeseries
+    ds_full = GEOSldas_io('SMAP_L4_SM_gph', 'NLv4_M36_US_OL_Pcorr').timeseries
     ds_full = ds_full.assign_coords({'time': ds_full['time'].values + pd.to_timedelta('2 hours')})
 
-    ds_obs_smap = GEOSldas_io('ObsFcstAna', 'NLv4_M36_US_DA_Pcorr_scl_SMAP_4K').timeseries['obs_obs']
+    ds_obs_smap = GEOSldas_io('ObsFcstAna', 'NLv4_M36_US_DA_SMAP_Pcorr_4K').timeseries['obs_obs']
 
     modes = ['abs', 'anom_lt', 'anom_st', 'anom_lst']
 
@@ -736,10 +737,10 @@ def plot_eval():
     relative = True
     snr = False
 
-    pc = 'Pcorr'
+    pc = 'noPcorr'
 
-    # ref_exp = f'OL_{pc}'
-    ref_exp = f'DA_{pc}_4K'
+    ref_exp = f'OL_{pc}'
+    # ref_exp = f'DA_{pc}_4K'
 
     ana = 'ana_' if analysis_only else ''
     rel = 'rel_' if relative else ''
@@ -751,7 +752,7 @@ def plot_eval():
     # topo = pd.read_csv('/Users/u0116961/data_sets/ASCAT/static_layer/topographic_complexity_conus.csv', index_col=0, squeeze=True, header=None)
 
     cbr_r = [0.6, 1.4] if relative else [0.2,0.7]
-    cbr_r = [-3, 3] if snr else [-0.3, 0.3] if relative else [0.2,0.7]
+    cbr_r = [-3, 3] if snr else [-0.2, 0.2] if relative else [0.2,0.7]
     cbr_len = [2e2, 2e3]
 
     runs = [f'OL_{pc}'] + [f'DA_{pc}_{err}' for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
@@ -761,8 +762,8 @@ def plot_eval():
     # params = ['len',]
     # cbranges = [cbr_len]
 
-    params = [f'r']
-    cbranges = [cbr_r]
+    params = ['r_corr']
+    cbranges = [cbr_r, cbr_r]
 
     # r_tca_
     # 'len', 'r',  'r_corr', 'ana_len', 'ana_r', 'ana_r_corr'
@@ -771,7 +772,8 @@ def plot_eval():
 
     for p, cbr in zip(params, cbranges):
 
-        cmap = 'seismic_r' if ('r' in p) & relative else 'YlGn'
+        # cmap = 'seismic_r' if ('r' in p) & relative else 'YlGn'
+        cmap = cc.cm.bjy
 
         for i, m in enumerate(modes):
 
@@ -935,11 +937,10 @@ if __name__=='__main__':
 
     # plot_ascat_smap_eval(iteration)
 
-    # run_ascat_eval_part(iteration, 1, 1)
+    # run_ascat_eval_part(1, 1)
 
 '''
 from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval
-run_ascat_eval(n_procs=36)
-
+run_ascat_eval(n_procs=30)
 
 '''

@@ -36,9 +36,9 @@ def abbr2per(abbr):
 
 def abbr2pent(abbr):
     if abbr.lower() == 'short':
-        return '2015_p19_2020_p19'
+        return '2015_p19_2021_p19'
     elif abbr.lower() == 'long':
-        return '2010_p01_2020_p19'
+        return '2010_p01_2021_p19'
     else:
         return '2010_p37_2015_p36'
 
@@ -148,9 +148,9 @@ def plot_climatology_ts(experiments):
             [32.300219, -107.117220], # New Mexico (low corr)
             [48.206665, -100.257308]] # North Dacota (good)
 
-    root = Path(f'/Users/u0116961/Documents/work/LDAS/2021-10_scaling/climatologies')
+    root = Path(f'/Users/u0116961/Documents/work/LDAS/2021-10_scaling/climatologies/Pcorr')
     names = ['_'.join(exp) for exp in experiments]
-    cols = getcols()
+    cols, _ = getcols()
     dss = []
     for (sens, abbr) in experiments:
         dss += [np.load(root / f'{sens}_{abbr}.npy')]
@@ -193,67 +193,73 @@ def plot_climatology_ts(experiments):
         # plt.tight_layout()
         # plt.show()
 
-def plot_Tb_ts():
+def plot_Tb_ts(experiments):
 
     # lat, lon = 41.509352, -110.254093 # Wyoming (high bias)
     # lat, lon = 32.300219, -107.117220 # New Mexico (low corr)
     # lat, lon = 48.206665, -100.257308 # North Dacota (good)
     lat, lon = 41.83347716648588, -98.47471538470059 # Nebraska
 
-    root = Path('/Users/u0116961/Documents/work/LDAS/2021-10_scaling')
+    root = Path('/Users/u0116961/Documents/work/LDAS/2021-10_scaling/climatologies/Pcorr')
 
-    io = GEOSldas_io('ObsFcstAna', exp='NLv4_M36_US_OL_Pcorr_SMAP')
-    scl = np.load(root / 'climatologies' / 'SMOSSMAP_short_old.npy')
+    for experiment in experiments:
 
-    idx_lon, idx_lat = io.grid.lonlat2colrow(lon, lat, domain=True)
-    tilenum = io.grid.colrow2tilenum(idx_lon,idx_lat)
+        exp = '_'.join(experiment)
 
-    scl_data = scl[tilenum-1][:,:,0]
-    idxs = [0]
-    for i in np.arange(73):
-        idxs += [i for j in range(5)]
-    scl_data = scl_data[np.array(idxs), :]
+        io = GEOSldas_io('ObsFcstAna', exp='NLv4_M36_US_OL_Pcorr_SMAP')
 
-    ts_obs = io.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()
-    ts_fcst = io.timeseries['obs_fcst'].isel(lat=idx_lat, lon=idx_lon).to_pandas()
+        try:
+            scl = np.load(root / f'{exp}.npy')
+        except:
+            continue
 
-    scl_data = scl_data[(ts_obs.index.dayofyear - 1).values, :]
+        idx_lon, idx_lat = io.grid.lonlat2colrow(lon, lat, domain=True)
+        tilenum = io.grid.colrow2tilenum(idx_lon,idx_lat)
 
-    plt.figure(figsize=(18,11))
-    fontsize=12
+        scl_data = scl[tilenum-1][:,:,0]
+        idxs = [0]
+        for i in np.arange(73):
+            idxs += [i for j in range(5)]
+        scl_data = scl_data[np.array(idxs), :]
 
-    _, species = getcols()
+        ts_obs = io.timeseries['obs_obs'].isel(lat=idx_lat, lon=idx_lon).to_pandas()
+        ts_fcst = io.timeseries['obs_fcst'].isel(lat=idx_lat, lon=idx_lon).to_pandas()
 
-    # H, Asc. / H, Dsc. / V, Asc. / V, Dsc.
+        scl_data = scl_data[(ts_obs.index.dayofyear - 1).values, :]
 
-    for i, spc in enumerate([1,2,3,4]):
+        plt.figure(figsize=(18,11))
+        fontsize=12
 
-        ax = plt.subplot(4, 1, i+1)
+        _, species = getcols()
 
-        tmp_df = pd.concat((ts_fcst[spc], ts_obs[spc]),axis=1)
-        tmp_df.columns = ['fcst','obs']
+        # H, Asc. / H, Dsc. / V, Asc. / V, Dsc.
 
-        ind = np.where(species==spc)[0]
+        for i, spc in enumerate([1,2,3,4]):
 
-        tmp_df['mean_obs'] = scl_data[:,ind[0]]
-        tmp_df['mean_fcst'] = scl_data[:,ind[1]]
+            ax = plt.subplot(4, 1, i+1)
 
-        tmp_df['obs_scl'] =  tmp_df['obs'] - (tmp_df['mean_obs'] - tmp_df['mean_fcst'])
+            tmp_df = pd.concat((ts_fcst[spc], ts_obs[spc]),axis=1)
+            tmp_df.columns = ['fcst','obs']
 
-        tmp_df['innov'] = tmp_df['obs_scl'] - tmp_df['fcst']
-        print(tmp_df['innov'].mean())
+            ind = np.where(species==spc)[0]
 
-        tmp_df[['innov']].interpolate().plot(ax=ax)
-        plt.axhline(color='black', linestyle='--', linewidth=1)
-        plt.ylim([-30,30])
+            tmp_df['mean_obs'] = scl_data[:,ind[0]]
+            tmp_df['mean_fcst'] = scl_data[:,ind[1]]
 
+            tmp_df['obs_scl'] =  tmp_df['obs'] - (tmp_df['mean_obs'] - tmp_df['mean_fcst'])
 
+            tmp_df['innov'] = tmp_df['obs_scl'] - tmp_df['fcst']
+            print(tmp_df['innov'].mean())
 
-    # plt.gcf().savefig(root / 'plots' / f'Tb_ts_{idx_lat}_{idx_lon}.png', dpi=300, bbox_inches='tight')
-    # plt.close()
+            tmp_df[['innov']].interpolate().plot(ax=ax)
+            plt.axhline(color='black', linestyle='--', linewidth=1)
+            plt.ylim([-30,30])
 
-    plt.tight_layout()
-    plt.show()
+        plt.gcf().savefig(root / f'Tb_ts_{idx_lat}_{idx_lon}_{exp}.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # plt.tight_layout()
+        # plt.show()
 
 
 def plot_Tb_clim_years_ts():
@@ -467,7 +473,7 @@ def run(fct, experiments):
 
 
 if __name__ == '__main__':
-    #
+
     # experiments = [['SMOSSMAP_PCA', 'short'],
     #                ['SMOSSMAP', 'long'],
     #                ['SMOSSMAP', 'short'],
@@ -475,19 +481,28 @@ if __name__ == '__main__':
     #                ['SMOS', 'short'],
     #                ['SMAP', 'short']]
 
-    experiments = [['SMOSSMAP', 'short']]
 
     # experiments = ['SMAP', 'short']
 
-    create_climatology_ts(['SMOSSMAP', 'short'])
+    # experiments = [['SMOSSMAP', 'short']]
+    experiments = [['SMOSSMAP', 'short'],
+                   ['SMAP', 'short']]
+
 
     # run(create_climatology_ts, experiments)
-    # plot_climatology_ts(experiments)
+
+    plot_climatology_ts(experiments)
+
+    # plot_Tb_ts(experiments)
+
+
+
+
+    # create_climatology_ts(['SMOSSMAP', 'short'])
 
     # calc_stats(experiments)
     # plot_stats(experiments)
 
-    # plot_Tb_ts()
     # plot_Tb_clim_years_ts()
 
     # calc_Tb_stats()

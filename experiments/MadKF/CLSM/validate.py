@@ -13,6 +13,7 @@ from collections import OrderedDict
 
 from scipy.stats import pearsonr
 from pytesmo.temporal_matching import df_match
+
 # from pytesmo.metrics import tcol_snr as TCA
 from validation_good_practice.ancillary.metrics import TCA_calc
 
@@ -121,19 +122,35 @@ def lonlat2gpi(lon,lat,gpi_list):
     rdiff = np.sqrt((gpi_list.lon - lon)**2 + (gpi_list.lat - lat)**2)
     return gpi_list.iloc[np.where((rdiff - rdiff.min()) < 0.0001)[0][0]].name
 
+
+def calc_ubRMSD(data):
+
+    res = pd.DataFrame(columns=data.columns, index=data.columns)
+
+    res.iloc[0, 1] = np.sqrt(np.nanmean((((data.iloc[:,0]-data.iloc[:,0].mean()) - (data.iloc[:,1]-data.iloc[:,1].mean()))**2)))
+    res.iloc[0, 2] = np.sqrt(np.nanmean((((data.iloc[:,0]-data.iloc[:,0].mean()) - (data.iloc[:,2]-data.iloc[:,2].mean()))**2)))
+    res.iloc[1, 2] = np.sqrt(np.nanmean((((data.iloc[:,1]-data.iloc[:,1].mean()) - (data.iloc[:,2]-data.iloc[:,2].mean()))**2)))
+    res.iloc[1, 0] = res.iloc[0, 1]
+    res.iloc[2, 0] = res.iloc[0, 2]
+    res.iloc[2, 1] = res.iloc[1, 2]
+
+    return res
+
 def TCA_insitu_evaluation(root):
 
     result_file = root / 'insitu_TCA.csv'
 
     names = ['OL_Pcorr', 'OL_noPcorr'] + \
             [f'DA_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
-    runs = ['NLv4_M36_US_OL_Pcorr_SMAP', 'NLv4_M36_US_OL_noPcorr_SMAP'] + \
-        [f'NLv4_M36_US_DA_{pc}_scl_SMAP_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
-    tss = [GEOSldas_io('tavg3_1d_lnr_Nt', run).timeseries for run in runs]
 
-    ts_full = GEOSldas_io('SMAP_L4_SM_gph', 'NLv4_M36_US_OL_Pcorr_scl_SMAP').timeseries
+    runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr' ] + \
+           [f'NLv4_M36_US_DA_SMAP_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
 
-    ts_ana =  GEOSldas_io('ObsFcstAna', 'NLv4_M36_US_DA_Pcorr_scl_SMAP_4K').timeseries['obs_obs']
+    tss = [GEOSldas_io('tavg3_1d_lnr_Nt', run).timeseries if '_OL_' not in run else GEOSldas_io('SMAP_L4_SM_gph', run).timeseries for run in runs]
+
+    ts_full = GEOSldas_io('SMAP_L4_SM_gph', 'NLv4_M36_US_OL_Pcorr').timeseries
+
+    ts_ana =  GEOSldas_io('ObsFcstAna', 'NLv4_M36_US_DA_SMAP_Pcorr_4K').timeseries['obs_obs']
     t_ana = pd.DatetimeIndex(ts_ana.time.values).sort_values()
 
     ascat = HSAF_io()
@@ -226,12 +243,17 @@ def TCA_insitu_evaluation(root):
                         except:
                             data = pd.concat((ts_mod, ts_asc, ts_ins), axis=0)
 
-                        tc_res = TCA_calc(data, ref_ind=0)
                         corr = data.corr()
+                        ubRMSD = calc_ubRMSD(data)
+                        tc_res = TCA_calc(data, ref_ind=0)
 
-                        res['R2_model_ascat_' + run + '_' + mode + '_' + var] = corr['model']['ascat']
-                        res['R2_model_insitu_' + run + '_' + mode + '_' + var] = corr['model']['insitu']
-                        res['R2_ascat_insitu_' + run + '_' + mode + '_' + var] = corr['ascat']['insitu']
+                        res['R_model_ascat_' + run + '_' + mode + '_' + var] = corr['model']['ascat']
+                        res['R_model_insitu_' + run + '_' + mode + '_' + var] = corr['model']['insitu']
+                        res['R_ascat_insitu_' + run + '_' + mode + '_' + var] = corr['ascat']['insitu']
+
+                        res['ubRMSD_model_ascat_' + run + '_' + mode + '_' + var] = ubRMSD['model']['ascat']
+                        res['ubRMSD_model_insitu_' + run + '_' + mode + '_' + var] = ubRMSD['model']['insitu']
+                        res['ubRMSD_ascat_insitu_' + run + '_' + mode + '_' + var] = ubRMSD['ascat']['insitu']
 
                         res['R2_model_' + run + '_' + mode + '_' + var] = tc_res[0][0]
                         res['R2_ascat_' + run + '_' + mode + '_' + var] = tc_res[0][1]
@@ -281,16 +303,14 @@ def filter_diagnostics_evaluation(root):
 
     result_file = root / 'filter_diagnostics.nc'
 
-    names = ['OL_Pcorr', 'OL_noPcorr'] + \
-            [f'DA_{pc}_{err}' for pc in ['Pcorr', 'noPcorr'] for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
-
-    runs = ['NLv4_M36_US_OL_Pcorr_SMAP', 'NLv4_M36_US_OL_noPcorr_SMAP'] + \
-           [f'NLv4_M36_US_DA_{pc}_scl_SMAP_{err}' for pc in ['Pcorr', 'noPcorr'] for err in
-            ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
+    runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr' ] + \
+           [f'NLv4_M36_US_DA_SMAP_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
 
     tss = [GEOSldas_io('ObsFcstAna',run) for run in runs]
 
-    tags = ['innov_autocorr','norm_innov_mean','norm_innov_var'] #,'norm_innov_mean_corr','norm_innov_var_corr']
+    modes = ['abs', 'anom_lt', 'anom_st', 'anom_lst']
+    params = [f'innov_autocorr', f'norm_innov_mean', f'norm_innov_var', f'innov_mean', f'innov_var']
+    tags = [f'{param}_{mode}' for param in params for mode in modes]
 
     lons = np.unique(tss[0].grid.tilecoord['com_lon'].values)
     lats = np.unique(tss[0].grid.tilecoord['com_lat'].values)[::-1]
@@ -303,10 +323,6 @@ def filter_diagnostics_evaluation(root):
     ind_col = tc.i_indg.values - tg.loc['domain', 'i_offg']
     ind_row = tc.j_indg.values - tg.loc['domain', 'j_offg']
 
-    # root_smap = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SMAP')
-    # obs_err.loc[:, 'obs_var_spc%i' % spc] = ensvar['fcst_var_spc%i' % spc] * mse['mse_obs_spc%i' % spc] / mse['mse_fcst_spc%i' % spc]
-    # obs_mse = obs_var * fcst_mse / fcst_var
-
     with ncfile_init(result_file, lats, lons, list(range(len(runs))), species, tags) as ds:
 
         for i_run,run in enumerate(tss):
@@ -314,64 +330,96 @@ def filter_diagnostics_evaluation(root):
 
                 logging.info(f'run {i_run}, species {i_spc}')
 
-                # scl_arr = np.full((83, 173), np.nan)
-                # if 'SMAP' in names[i_run]:
-                #     it, mode = int(names[i_run][-2]), int(names[i_run][-1])
-                    # if it == 1:
-                    #     tmproot = root_smap / f'iter_{it}{mode}_init'
-                    #     ensvar = pd.read_csv(tmproot / 'result_files' / 'ens_var.csv', index_col=0)
-                    #     mse = pd.read_csv(tmproot / 'result_files' / 'mse.csv', index_col=0)
-                    # else:
-                    #     tmproot = root_smap / f'iter_{it-1}{mode}'
-                    #     ensvar = pd.read_csv(tmproot / 'result_files' / 'ens_var.csv', index_col=0)
-                    #     mse = pd.read_csv(tmproot / 'result_files' / 'mse_corrected.csv', index_col=0)
+                _, _, n_lats, n_lons = run.timeseries['obs_obs'].shape
+                for i in range(n_lats):
+                    logging.info(f'lat index {i}')
+                    for j in range(n_lons):
 
-                    # scl_arr[ind_row, ind_col] = (mse[f'mse_fcst_spc{spc}'] / ensvar[f'fcst_var_spc{spc}']).values
-                # scl_arr[np.isnan(scl_arr)] = 1
+                        gpi_obs = run.timeseries['obs_obs'].isel(lat=i, lon=j, species=i_spc).to_pandas()
+                        gpi_fcst = run.timeseries['obs_fcst'].isel(lat=i, lon=j, species=i_spc).to_pandas()
 
-                innov = run.timeseries['obs_obs'].isel(species=i_spc) - run.timeseries['obs_fcst'].isel(species=i_spc)
+                        for mode in modes:
 
-                ds['innov_autocorr'][:,:,i_run,i_spc] = calc_iac_spc(innov)
+                            if mode == 'anom_lst':
+                                tmp_obs = calc_anom(gpi_obs.copy(), longterm=True)
+                                tmp_fcst = calc_anom(gpi_fcst.copy(), longterm=True)
+                            elif mode == 'anom_st':
+                                tmp_obs = calc_anom(gpi_obs.copy(), longterm=False)
+                                tmp_fcst = calc_anom(gpi_fcst.copy(), longterm=False)
+                            elif mode == 'anom_lt':
+                                tmp_obs = (calc_anom(gpi_obs.copy(), longterm=True) - calc_anom(gpi_obs.copy(),longterm=False))
+                                tmp_fcst = (calc_anom(gpi_fcst.copy(), longterm=True) - calc_anom(gpi_fcst.copy(),longterm=False))
+                            else:
+                                tmp_obs = gpi_obs.copy()
+                                tmp_fcst = gpi_fcst.copy()
 
-                ds['norm_innov_mean'][:,:,i_run,i_spc] = \
-                    (innov / np.sqrt(run.timeseries['obs_obsvar'].isel(species=i_spc) + run.timeseries['obs_fcstvar'].isel(species=i_spc))).mean(dim='time').values
-                ds['norm_innov_var'][:,:,i_run,i_spc] = \
-                    (innov / np.sqrt(run.timeseries['obs_obsvar'].isel(species=i_spc) + run.timeseries['obs_fcstvar'].isel(species=i_spc))).var(dim='time').values
+                            tmp_innov = tmp_obs - tmp_fcst
 
-                # if 'SMAP' in names[i_run]:
-                #     ds['norm_innov_mean_corr'][:,:,i_run,i_spc] = \
-                #         (innov / np.sqrt(run.timeseries['obs_obsvar'].isel(species=i_spc) * scl_arr + run.timeseries['obs_fcstvar'].isel(species=i_spc))).mean(dim='time').values
-                #     ds['norm_innov_var_corr'][:,:,i_run,i_spc] = \
-                #         (innov / np.sqrt(run.timeseries['obs_obsvar'].isel(species=i_spc) * scl_arr + run.timeseries['obs_fcstvar'].isel(species=i_spc))).var(dim='time').values
+                            if len(tmp_innov.dropna()) > 0:
+                                pass
+
+                            ds[f'innov_autocorr_{mode}'][i,j,i_run,i_spc] = calc_iac_spc(tmp_innov)
+
+                            ds[f'innov_mean_{mode}'][i,j,i_run,i_spc] = tmp_innov.dropna().mean()
+                            ds[f'innov_var_{mode}'][i,j,i_run,i_spc] = tmp_innov.dropna().var()
+
+                            ds[f'norm_innov_mean_{mode}'][i,j,i_run,i_spc] = \
+                                (tmp_innov / np.sqrt(run.timeseries['obs_obsvar'].isel(lat=i, lon=j, species=i_spc) + run.timeseries['obs_fcstvar'].isel(lat=i, lon=j, species=i_spc))).dropna().mean()
+                            ds[f'norm_innov_var_{mode}'][i,j,i_run,i_spc] = \
+                                (tmp_innov / np.sqrt(run.timeseries['obs_obsvar'].isel(lat=i, lon=j, species=i_spc) + run.timeseries['obs_fcstvar'].isel(lat=i, lon=j, species=i_spc))).dropna().var()
 
 
 def calc_iac_spc(innov):
 
-    iac = np.full(innov.shape[1::], np.nan)
-    nlats, nlons = iac.shape
+    ts = innov.dropna()
 
-    for i_lat in range(nlats):
-        for i_lon in range(nlons):
+    if len(ts) == 0:
+        return np.nan
 
-            ts = innov.isel(lat=i_lat, lon=i_lon).to_pandas().dropna()
-            if len(ts) == 0:
-                continue
-            ts_l = ts.copy()
+    ts_l = ts.copy()
 
-            lags = (ts.index[1::] - ts.index[0:-1]).value_counts().sort_index().index
-            lags = lags[lags <= '5 days']
+    lags = (ts.index[1::] - ts.index[0:-1]).value_counts().sort_index().index
+    lags = lags[lags <= '5 days']
 
-            ac = []
-            for lag in lags:
-                ts_l.index = ts.index + lag
-                ac.append(ts.corr(ts_l))
+    ac = []
+    for lag in lags:
+        ts_l.index = ts.index + lag
+        ac.append(ts.corr(ts_l))
+    try:
+        f = LinearRegression().fit(lags.total_seconds().values.reshape(-1, 1), np.array(ac).reshape(-1, 1))
+        iac = f.predict([[48 * 3600]])[0, 0]
+    except:
+        return np.nan
 
-            try:
-                f = LinearRegression().fit(lags.total_seconds().values.reshape(-1, 1), np.array(ac).reshape(-1, 1))
-                iac[i_lat,i_lon] = f.predict([[48 * 3600]])[0, 0]
-            except:
-                continue
     return iac
+
+# def calc_iac_spc(innov):
+#
+#     iac = np.full(innov.shape[1::], np.nan)
+#     nlats, nlons = iac.shape
+#
+#     for i_lat in range(nlats):
+#         for i_lon in range(nlons):
+#
+#             ts = innov.isel(lat=i_lat, lon=i_lon).to_pandas().dropna()
+#             if len(ts) == 0:
+#                 continue
+#             ts_l = ts.copy()
+#
+#             lags = (ts.index[1::] - ts.index[0:-1]).value_counts().sort_index().index
+#             lags = lags[lags <= '5 days']
+#
+#             ac = []
+#             for lag in lags:
+#                 ts_l.index = ts.index + lag
+#                 ac.append(ts.corr(ts_l))
+#
+#             try:
+#                 f = LinearRegression().fit(lags.total_seconds().values.reshape(-1, 1), np.array(ac).reshape(-1, 1))
+#                 iac[i_lat,i_lon] = f.predict([[48 * 3600]])[0, 0]
+#             except:
+#                 continue
+#     return iac
 
 def validate_all():
 
@@ -382,10 +430,8 @@ def validate_all():
         Path.mkdir(root, parents=True)
 
     # insitu_evaluation(root)
-    # TCA_insitu_evaluation(root)
-    filter_diagnostics_evaluation(root)
-
-
+    TCA_insitu_evaluation(root)
+    # filter_diagnostics_evaluation(root)
 
 
 

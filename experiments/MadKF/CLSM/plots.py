@@ -60,14 +60,14 @@ def plot_image(img, lats, lons,
 
     plt.title(title,fontsize=fontsize)
 
-    x, y = m(-78.5, 27.5)
-    plt.text(x, y, 'm', fontsize=fontsize - 3)
-    x, y = m(-75, 27.5)
+    x, y = m(-79, 27.5)
+    plt.text(x, y, 'mean', fontsize=fontsize - 3)
+    x, y = m(-74, 27.5)
     plt.text(x, y, '= %.2f' % np.ma.median(img_masked), fontsize=fontsize - 3)
 
-    x, y = m(-78, 25)
-    plt.text(x, y, 's', fontsize=fontsize - 3)
-    x, y = m(-75, 25)
+    x, y = m(-79, 25)
+    plt.text(x, y, 'std.', fontsize=fontsize - 3)
+    x, y = m(-74, 25)
     plt.text(x, y, '= %.2f' % np.ma.std(img_masked), fontsize=fontsize - 3)
 
 def plot_filter_diagnostics_violins(root):
@@ -128,7 +128,8 @@ def plot_filter_diagnostics(root):
     runs = ['OL_Pcorr', 'OL_noPcorr', 'DA_Pcorr_4K', 'DA_noPcorr_4K'] + \
             [f'DA_{pc}_{err}' for pc in ['Pcorr', 'noPcorr'] for err in ['abs', 'anom_lt', 'anom_lst', 'anom_st']]
 
-    ref = 'DA_Pcorr_4K'
+    # ref = 'DA_Pcorr_4K'
+    ref = None
 
     iters = np.arange(len(runs))
 
@@ -138,14 +139,14 @@ def plot_filter_diagnostics(root):
         lats = ds.variables['lat'][:]
         lons, lats = np.meshgrid(lons, lats)
 
-        variables = ['innov_autocorr',]
-        cbranges = [[-0.1,0.1]]
-        steps = [0.05]
-        cmaps = [cc.cm.bjy]
-        # variables = ['innov_autocorr','norm_innov_mean','norm_innov_var']
-        # cbranges = [[0,0.7], [-0.5,0.5], [-2,4]]
-        # steps = [0.2, 0.25, 1]
-        # cmaps = ['viridis' ,cc.cm.bjy,  cc.cm.bjy]
+        # variables = ['innov_autocorr',]
+        # cbranges = [[-0.1,0.1]]
+        # steps = [0.05]
+        # cmaps = [cc.cm.bjy]
+        variables = ['innov_autocorr_abs','norm_innov_mean_abs','norm_innov_var_abs']
+        cbranges = [[0,0.7], [-0.5,0.5], [-2,4]]
+        steps = [0.2, 0.25, 1]
+        cmaps = ['viridis' ,cc.cm.bjy,  cc.cm.bjy]
 
         for var, cbrange, cmap, step in zip(variables, cbranges, cmaps, steps):
             for spc in np.arange(4):
@@ -549,7 +550,7 @@ def plot_suspicious_stations(root):
 
 def plot_ismn_statistics(root):
 
-    res = pd.read_csv(root / 'insitu_TCA.csv', index_col=0)
+    res = pd.read_csv(root / 'validation' / 'insitu_TCA.csv', index_col=0)
     res.index = res.network
     res.drop('network', axis='columns', inplace=True)
     # res2 = pd.read_csv(root / 'insitu.csv', index_col=0)
@@ -559,15 +560,9 @@ def plot_ismn_statistics(root):
     variables = ['sm_surface', 'sm_rootzone']
     var_labels = ['surface', 'root-zone']
 
+    pc = 'Pcorr'
 
-    # runs =  ['open_loop', 'DA_4K_obserr'] + \
-    #         [f'SMAP_it{i}{j}' for j in  range(1,4) for i in  range(1,5)]
-    #
-    # run_labels = ['Open Loop', 'EnKF (4K err.)'] + \
-    #              [f'MadKF iter. {i}{j}' for j in  range(1,4) for i in range(1,5) ]
-
-    # runs = [f'OL_Pcorr', 'OL_noPcorr'] + [f'DA_{pc}_{err}' for pc in ['Pcorr', 'noPcorr'] for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
-    runs = [f'OL_noPcorr'] + [f'DA_noPcorr_{err}' for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
+    runs = [f'OL_{pc}'] + [f'DA_{pc}_{err}' for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
     run_labels = runs
 
     n_runs = len(runs)
@@ -584,17 +579,19 @@ def plot_ismn_statistics(root):
     # cols = ['lightblue', 'lightgreen', 'coral']
     fontsize = 16
 
+    nets = ''
+
     networks  = ['SCAN', 'USCRN']
-    title = ', '.join(networks)
     res = res.loc[res.index.isin(networks),:]
-    # res2 = res2.loc[res2.index.isin(networks),:]
+    nets = '_SCANUSCRN'
+
 
     # titles = ['ubRMSD', 'ubRMSE', 'Pearson R$^2$ ', 'TCA R$^2$']
-    titles = ['ubRMSE', 'R$^2$ (DA-ASCAT)', 'R$^2$ (DA-ISMN) ', 'TCA R$^2$']
+    titles = ['ubRMSD (DA-ISMN)', 'R$^2$ (DA-ISMN)', 'ubRMSE ', 'TCA R$^2$']
 
-    ylims = [[0.0, 0.05],
+    ylims = [[0.00, 0.1],
              [0.0, 0.8],
-             [0.0, 0.8],
+             [0.0, 0.05],
              [0.2, 1.0]]
 
     modes = ['abs', 'anom_lt', 'anom_st', 'anom_lst']
@@ -603,9 +600,9 @@ def plot_ismn_statistics(root):
 
         f = plt.figure(figsize=(20,8))
 
-        valss = [[[res[f'ubRMSE_model_{run}_{mode}_{var}'].values for run in runs] for var in variables],
-                 [[res[f'R2_model_ascat_{run}_{mode}_{var}'].values for run in runs] for var in variables],
+        valss = [[[res[f'ubRMSD_model_insitu_{run}_{mode}_{var}'].values for run in runs] for var in variables],
                  [[res[f'R2_model_insitu_{run}_{mode}_{var}'].values ** 2 for run in runs] for var in variables],
+                 [[res[f'ubRMSE_model_{run}_{mode}_{var}'].values for run in runs] for var in variables],
                  [[res[f'R2_model_{run}_{mode}_{var}'].values for run in runs] for var in variables]]
 
         for n, (vals, tit, ylim) in enumerate(zip(valss, titles, ylims)):
@@ -650,7 +647,83 @@ def plot_ismn_statistics(root):
                 plt.figlegend((box['boxes'][0:n_runs]),run_labels,'upper right',fontsize=fontsize-4)
             ax.set_title(tit ,fontsize=fontsize)
 
-        fout = root.parent / 'plots' / 'ismn_eval' / f'ismn_stats_{mode}_SCANUSCRN.png'
+        outdir = root / 'plots' / f'ismn_eval_{pc}'
+        if not outdir.exists():
+            Path.mkdir(outdir, parents=True)
+
+        f.savefig(outdir / f'ismn_stats_{mode}{nets}.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+    # plt.tight_layout()
+    # plt.show()
+
+def plot_ismn_results_map(root):
+
+    # res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/insitu_TCA.csv', index_col=0)
+    res = pd.read_csv(root / 'validation' / 'insitu_TCA.csv', index_col=0)
+    res.index = res.network
+    res.drop('network', axis='columns', inplace=True)
+
+    # networks  = ['SCAN', 'USCRN']
+    # res = res.loc[res.index.isin(networks),:]
+
+    variables = ['sm_surface', 'sm_rootzone']
+    var_labels = ['surface', 'root-zone']
+
+    lats = res['latitude'].values
+    lons = res['longitude'].values
+
+    # runs = [f'OL_Pcorr', 'OL_noPcorr'] + [f'DA_{pc}_{err}' for pc in ['Pcorr', 'noPcorr'] for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
+    runs = [f'OL_Pcorr'] + [f'DA_Pcorr_{err}' for err in ['4K', 'abs', 'anom_lt', 'anom_lst', 'anom_st']]
+    run_labels = runs
+    n_runs = len(runs)
+
+    fontsize = 16
+
+
+    titles = ['ubRMSE', 'R$^2$ (DA-ASCAT)', 'R$^2$ (DA-ISMN) ', 'TCA R$^2$']
+
+    ylims = [[0.0, 0.05],
+             [0.0, 0.8],
+             [0.0, 0.8],
+             [0.2, 1.0]]
+
+    modes = ['abs', 'anom_lt', 'anom_st', 'anom_lst']
+
+    for mode in modes:
+
+        f = plt.figure(figsize=(24,10))
+
+        for i, run in enumerate(runs[1::]):
+
+            ax = plt.subplot(2,3,i+1)
+
+            llcrnrlat = 24
+            urcrnrlat = 51
+            llcrnrlon = -128
+            urcrnrlon = -64
+
+            m = Basemap(projection='mill', llcrnrlat=llcrnrlat, urcrnrlat=urcrnrlat,
+                        llcrnrlon=llcrnrlon, urcrnrlon=urcrnrlon, resolution='c', )
+            m.drawcoastlines()
+            m.drawcountries()
+            m.drawstates()
+
+            xs, ys = m(lons, lats)
+
+            c = res[f'R2_model_{run}_{mode}_sm_surface'].values - res[f'R2_model_DA_Pcorr_4K_{mode}_sm_surface'].values
+            # c = res[f'R2_model_{run}_{mode}_sm_surface'].values - res[f'R2_model_OL_Pcorr_{mode}_sm_surface'].values
+
+            sc = plt.scatter(xs, ys, c=c, s=40, label='R2', vmin=-0.2, vmax=0.2, cmap=cc.cm.bjy)
+            plt.title(run)
+
+            cb = m.colorbar(sc, "bottom", size="7%", pad="5%")
+
+            x, y = m(-79, 25)
+            plt.text(x, y, 'm. = %.3f' % np.nanmedian(c), fontsize=fontsize - 2)
+
+        fout = root / 'plots' / 'ismn_eval_Pcorr' / f'skill_gain_ref_4K_{mode}.png'
+        # fout = root / 'plots' / 'ismn_eval_Pcorr' / f'skill_gain_ref_OL_{mode}.png'
         f.savefig(fout, dpi=300, bbox_inches='tight')
         plt.close()
 
@@ -794,8 +867,6 @@ def plot_ts(lon, lat):
 
 if __name__=='__main__':
 
-    iteration = 4
-    # root = Path(f'~/Documents/work/MadKF/CLSM/iter_{iteration}/validation').expanduser()
     root = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas')
 
     # if not (root / 'plots').exists():
@@ -814,12 +885,14 @@ if __name__=='__main__':
 
     # plot_ismn_statistics(root)
     # plot_ismn_statistics_v2()
-    # plot_ismn_statistics(root)
+
+    plot_ismn_statistics(root)
 
     # find_suspicious_stations(root)
     # plot_suspicious_stations(root)
 
-    plot_filter_diagnostics(root)
+    # plot_ismn_results_map(root)
+    # plot_filter_diagnostics(root)
     # plot_filter_diagnostics_violins(root)
 
     # plot_improvement_vs_uncertainty_update(iteration)
