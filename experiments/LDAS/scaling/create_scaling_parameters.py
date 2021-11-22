@@ -21,7 +21,7 @@ from pyldas.interface import GEOSldas_io
 from pyldas.templates import template_scaling
 from pyldas.visualize.plots import plot_ease_img
 
-from myprojects.timeseries import calc_clim_harmonic, calc_pentadal_mean_std
+from myprojects.timeseries import calc_clim_harmonic, calc_pentadal_mean_std, calc_anom, calc_anomaly
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
@@ -84,14 +84,18 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     :param use_pc: If true, the first principal component of SMOS/SMAP Tb will be used
     '''
 
-    sensor, date_from, date_to = args
-
-    pc = 'Pcorr'
+    sensor, date_from, date_to, pc = args
 
     exp_smap = f'NLv4_M36_US_OL_{pc}'
     exp_smos = f'NLv4_M36_US_OL_{pc}_SMOS'
 
-    ext = '_yearly' if mode == 'shortterm' else ''
+    if mode == 'shortterm':
+        ext = '_yearly'
+    elif mode == 'longterm':
+        ext = '_daily'
+    else:
+        ext = ''
+
     froot = Path(f'~/data_sets/GEOSldas_runs/_scaling_files_{pc}{ext}').expanduser()
     if not froot.exists():
         Path.mkdir(froot, parents=True)
@@ -112,8 +116,7 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
         date_to = pd.to_datetime(date_to)
     pent_from = int(np.floor((date_from.dayofyear - 1) / 5.) + 1)
     pent_to = int(np.floor((date_to.dayofyear - 1) / 5.) + 1)
-    sub = '_PCA' if (use_pc and (sensor == 'SMOSSMAP')) else ''
-    fbase = f'Thvf_TbSM_001_src_{sensor}{sub}_trg_{scale_target}_{date_from.year}_p{pent_from:02}_{date_to.year}_p{pent_to:02}_W_9p_Nmin_20'
+    fbase = f'Thvf_TbSM_001_src_{sensor}_trg_{scale_target}_{date_from.year}_p{pent_from:02}_{date_to.year}_p{pent_to:02}_W_9p_Nmin_20'
 
     dtype, _, _ = template_scaling(sensor='SMOS40')
 
@@ -130,14 +133,17 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     pentads = np.arange(73)+1
 
     if mode == 'longterm':
-        dummy = np.full([len(tiles),len(pentads),len(angles),len(pols),len(orbits[0])],-9999)
+        years = np.arange(date_from.year, date_to.year + 1)
+        doys = np.arange(1,367)
+        dummy = np.full([len(tiles), len(doys), len(years), len(angles), len(pols), len(orbits[0])], -9999)
         coords = {'tile_id': tiles,
-                  'pentad': pentads,
+                  'doy': doys,
+                  'year': years,
                   'angle': angles,
                   'pol': pols,
                   'orbit': orbits[0]}
-        darr = xr.DataArray(dummy, coords=coords, dims=['tile_id','pentad','angle','pol','orbit'])
-    else:
+        darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'doy', 'year', 'angle', 'pol', 'orbit'])
+    elif mode == 'shortterm':
         years = np.arange(date_from.year, date_to.year+1)
         dummy = np.full([len(tiles), len(pentads), len(years), len(angles), len(pols), len(orbits[0])], -9999)
         coords = {'tile_id': tiles,
@@ -147,6 +153,14 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                   'pol': pols,
                   'orbit': orbits[0]}
         darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'pentad', 'year', 'angle', 'pol', 'orbit'])
+    else:
+        dummy = np.full([len(tiles),len(pentads),len(angles),len(pols),len(orbits[0])],-9999)
+        coords = {'tile_id': tiles,
+                  'pentad': pentads,
+                  'angle': angles,
+                  'pol': pols,
+                  'orbit': orbits[0]}
+        darr = xr.DataArray(dummy, coords=coords, dims=['tile_id','pentad','angle','pol','orbit'])
 
     data = xr.Dataset({'m_obs':darr.astype('float32'),
                        's_obs': darr.astype('float32'),
@@ -185,18 +199,32 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                         continue
 
                     if mode == 'longterm':
-                        data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
-                        data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(obs[date_from:date_to])
-                        data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
-                        data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(mod[date_from:date_to])
-                        data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = len(obs[date_from:date_to].dropna())
-                    else:
+                        obs_clim = calc_anomaly(obs, longterm=True, output='climatology')
+                        mod_clim = calc_anomaly(mod, longterm=True, output='climatology')
+                        obs_scl_clim = obs - obs_clim + mod_clim
+                        obs_anom = calc_anom(obs_scl_clim, longterm=False)
+                        mod_anom = calc_anom(mod, longterm=False)
+                        m_obs = (obs_clim + obs_anom).resample('1D').mean().replace(np.nan, -9999)
+                        m_mod = (mod_clim + mod_anom).resample('1D').mean().replace(np.nan, -9999)
+                        for idx in m_obs.index:
+                            data['m_obs'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_obs[idx]
+                            data['s_obs'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_obs[idx]
+                            data['m_mod'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_mod[idx]
+                            data['s_mod'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_mod[idx]
+                            data['N_data'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = 999
+                    elif mode == 'shortterm':
                         for yr in years:
                             data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
                             data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(obs[obs.index.year==yr][date_from:date_to])
                             data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
                             data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(mod[mod.index.year==yr][date_from:date_to])
                             data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = len(obs[obs.index.year==yr][date_from:date_to].dropna())
+                    else:
+                        data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
+                        data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(obs[date_from:date_to])
+                        data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
+                        data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(mod[date_from:date_to])
+                        data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = len(obs[date_from:date_to].dropna())
 
     modes = np.array([0, 0])
     sdate = np.array([date_from.year, date_from.month, date_from.day, 0, 0])
@@ -204,49 +232,77 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     lengths = np.array([len(tiles), len(angles), 1])  # tiles, incidence angles, whatever
 
     # ----- write output files -----
-    for pent in pentads:
+    if mode == 'longterm':
         for orb in orbits[0]:
             # !!! inconsistent with the definition in the obs_paramfile (species) !!!
             modes[0] = 1 if orb == 'A' else 0
-
-            if mode == 'longterm':
-                res = template.copy()
-                for ang in angles:
-                    for pol in pols:
-                        res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
-                        res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
-                        res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
-                        res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
-                        res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
-                res.replace(np.nan, -9999, inplace=True)
-                fname = froot / f'{fbase}_{orb}_p{pent:02}.bin'
-                fid = open(fname, 'wb')
-                ios[0].write_fortran_block(fid, modes)
-                ios[0].write_fortran_block(fid, sdate)
-                ios[0].write_fortran_block(fid, edate)
-                ios[0].write_fortran_block(fid, lengths)
-                ios[0].write_fortran_block(fid, angles.astype('float')) # required by LDASsa!!
-                for f in res.columns.values:
-                    ios[0].write_fortran_block(fid, res[f].values)
-                fid.close()
-            else:
-                for yr in years:
+            for yr in years:
+                for doy in doys:
                     res = template.copy()
                     for ang in angles:
                         for pol in pols:
-                            res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                            res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                            res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                            res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                            res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                            res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
+                            res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
+                            res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
+                            res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
+                            res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
                     res.replace(np.nan, -9999, inplace=True)
-                    fname = froot / f'{fbase}_{orb}_p{pent:02}_y{yr:04}.bin'
+                    fdir = froot / f'y{yr:04}'
+                    if not fdir.exists():
+                        Path.mkdir(fdir, parents=True)
+                    fname = fdir / f'{fbase}_{orb}_d{doy:03}.bin'
                     fid = open(fname, 'wb')
                     ios[0].write_fortran_block(fid, modes)
                     ios[0].write_fortran_block(fid, sdate)
                     ios[0].write_fortran_block(fid, edate)
                     ios[0].write_fortran_block(fid, lengths)
                     ios[0].write_fortran_block(fid, angles.astype('float'))  # required by LDASsa!!
+                    for f in res.columns.values:
+                        ios[0].write_fortran_block(fid, res[f].values)
+                    fid.close()
+    else:
+        for pent in pentads:
+            for orb in orbits[0]:
+                # !!! inconsistent with the definition in the obs_paramfile (species) !!!
+                modes[0] = 1 if orb == 'A' else 0
+                if mode == 'shortterm':
+                    for yr in years:
+                        res = template.copy()
+                        for ang in angles:
+                            for pol in pols:
+                                res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                                res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                                res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                                res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                                res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                        res.replace(np.nan, -9999, inplace=True)
+                        fname = froot / f'{fbase}_{orb}_p{pent:02}_y{yr:04}.bin'
+                        fid = open(fname, 'wb')
+                        ios[0].write_fortran_block(fid, modes)
+                        ios[0].write_fortran_block(fid, sdate)
+                        ios[0].write_fortran_block(fid, edate)
+                        ios[0].write_fortran_block(fid, lengths)
+                        ios[0].write_fortran_block(fid, angles.astype('float'))  # required by LDASsa!!
+                        for f in res.columns.values:
+                            ios[0].write_fortran_block(fid, res[f].values)
+                        fid.close()
+                else:
+                    res = template.copy()
+                    for ang in angles:
+                        for pol in pols:
+                            res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
+                            res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
+                            res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
+                            res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
+                            res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent).to_series()
+                    res.replace(np.nan, -9999, inplace=True)
+                    fname = froot / f'{fbase}_{orb}_p{pent:02}.bin'
+                    fid = open(fname, 'wb')
+                    ios[0].write_fortran_block(fid, modes)
+                    ios[0].write_fortran_block(fid, sdate)
+                    ios[0].write_fortran_block(fid, edate)
+                    ios[0].write_fortran_block(fid, lengths)
+                    ios[0].write_fortran_block(fid, angles.astype('float')) # required by LDASsa!!
                     for f in res.columns.values:
                         ios[0].write_fortran_block(fid, res[f].values)
                     fid.close()
@@ -277,7 +333,14 @@ def replace_angle_field():
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    args = ('SMOSSMAP', '2015-04-01', '2020-04-01')
+    args = ('SMAP', '2015-04-01', '2021-04-01', 'Pcorr')
     run(args, scale_target='SMAP', mode='longterm')
 
     # replace_angle_field()
+
+'''
+from myprojects.experiments.LDAS.scaling.create_scaling_parameters import run
+args = ('SMAP', '2015-04-01', '2021-04-01', 'Pcorr')
+run(args, scale_target='SMAP', mode='longterm')
+
+'''
