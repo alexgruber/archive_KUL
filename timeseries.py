@@ -7,12 +7,48 @@ import logging
 from pytesmo.time_series.anomaly import calc_climatology
 from pytesmo.time_series.anomaly import calc_anomaly as calc_anom_pytesmo
 
-def calc_anom(Ser, longterm=False, window_size=35):
+def calc_anom(Ser, mode='climatological', window_size=35, return_clim=False, return_clim366=False):
+    '''
+    :param Ser:             pandas.Series; index must be a datetime index
+    :param mode:            string; one of:
+                                "climatological": calculate anomalies from the mean seasonal cycle
+                                "longterm": inter-annual variabilities only (climatological anomalies minus short-term anomalies)
+                                "shortterm": residuals from the seasonality (i.e., moving average) of each individual year
+    :param window_size:     integer; window size for calculating the climatology and/or seasonality
+    :param return_clim:     boolean; If true, the climatology value is returned for each timestep of the input Series
+                                     This overrules the "mode" keyword!
+    :param return_clim366:  boolean; If true, the actual climatology is returned (366 values)
+                                     This overrules both the "mode" and "return_clim" keywords!
+    '''
 
-    anom = calc_anom_pytesmo(Ser, climatology=calc_climatology(Ser) if longterm else None, window_size=window_size)
-    anom.name = Ser.name
+    if mode not in ['climatological', 'longterm', 'shortterm']:
+        logging.error('calc_anom: unknown anomaly type')
+        return None
 
-    return anom
+    # Calculate the climatology
+    if (mode != 'shortterm') | return_clim | return_clim366:
+        clim = calc_climatology(Ser, respect_leap_years=True, wraparound=True, moving_avg_clim=window_size)
+    else:
+        clim = None
+
+    # Return the actual climatology (366 values)
+    if return_clim366:
+        return clim
+
+    # Calculate either climatological or short-term anomalies
+    res = calc_anom_pytesmo(Ser, climatology=clim, window_size=window_size, return_clim=return_clim)
+
+    # Derive long-term anomalies by subtracting short-term anomalies from climatological anomalies
+    if (mode == 'longterm') and not return_clim:
+        res -= calc_anom_pytesmo(Ser, climatology=None, window_size=window_size)
+
+    # Return climatology values for each time step of the input Series
+    if return_clim:
+        res = res['climatology']
+
+    res.name = Ser.name
+
+    return res
 
 def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False, window_size=35):
 
