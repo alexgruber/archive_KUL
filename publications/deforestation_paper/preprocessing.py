@@ -132,5 +132,6 @@ if __name__=='__main__':
 import sys
 sys.path.append('/data/leuven/320/vsc32046/python/')
 from myprojects.publications.deforestation_paper.preprocessing import reformat_MERRA2
+reformat_MERRA2()
 
 '''
