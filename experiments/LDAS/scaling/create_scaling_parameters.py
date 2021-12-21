@@ -118,7 +118,7 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     pent_to = int(np.floor((date_to.dayofyear - 1) / 5.) + 1)
     fbase = f'Thvf_TbSM_001_src_{sensor}_trg_{scale_target}_{date_from.year}_p{pent_from:02}_{date_to.year}_p{pent_to:02}_W_9p_Nmin_20'
 
-    dtype, _, _ = template_scaling(sensor='SMOS40')
+    dtype, _, _ = template_scaling(sensor='SMAP')
 
     tiles = ios[0].grid.tilecoord['tile_id'].values.astype('int32')
     angles = np.array([40,], 'int')
@@ -135,25 +135,31 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
     if mode == 'longterm':
         years = np.arange(date_from.year, date_to.year + 1)
         doys = np.arange(1,367)
-        dummy = np.full([len(tiles), len(doys), len(years), len(angles), len(pols), len(orbits[0])], -9999)
-        coords = {'tile_id': tiles,
-                  'doy': doys,
-                  'year': years,
-                  'angle': angles,
-                  'pol': pols,
-                  'orbit': orbits[0]}
-        darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'doy', 'year', 'angle', 'pol', 'orbit'])
+        data_obs = np.full([len(tiles), len(doys), len(years), len(pols), len(orbits[0])], -9999.)
+        data_mod = data_obs.copy()
+        # dummy = np.full([len(tiles), len(doys), len(years), len(angles), len(pols), len(orbits[0])], -9999)
+        # coords = {'tile_id': tiles,
+        #           'doy': doys,
+        #           'year': years,
+        #           'angle': angles,
+        #           'pol': pols,
+        #           'orbit': orbits[0]}
+        # darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'doy', 'year', 'angle', 'pol', 'orbit'])
     elif mode == 'shortterm':
         years = np.arange(date_from.year, date_to.year+1)
-        dummy = np.full([len(tiles), len(pentads), len(years), len(angles), len(pols), len(orbits[0])], -9999)
-        coords = {'tile_id': tiles,
-                  'pentad': pentads,
-                  'year': years,
-                  'angle': angles,
-                  'pol': pols,
-                  'orbit': orbits[0]}
-        darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'pentad', 'year', 'angle', 'pol', 'orbit'])
+        data_obs = np.full([len(tiles), len(pentads), len(years), len(pols), len(orbits[0])], -9999.)
+        data_mod = data_obs.copy()
+        n_data = np.full([len(tiles), len(pentads), len(years), len(pols), len(orbits[0])], -9999)
+        # dummy = np.full([len(tiles), len(pentads), len(years), len(angles), len(pols), len(orbits[0])], -9999)
+        # coords = {'tile_id': tiles,
+        #           'pentad': pentads,
+        #           'year': years,
+        #           'angle': angles,
+        #           'pol': pols,
+        #           'orbit': orbits[0]}
+        # darr = xr.DataArray(dummy, coords=coords, dims=['tile_id', 'pentad', 'year', 'angle', 'pol', 'orbit'])
     else:
+        # TODO: Currently doesn't work anymore because of modification for lt and st
         dummy = np.full([len(tiles),len(pentads),len(angles),len(pols),len(orbits[0])],-9999)
         coords = {'tile_id': tiles,
                   'pentad': pentads,
@@ -162,90 +168,85 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                   'orbit': orbits[0]}
         darr = xr.DataArray(dummy, coords=coords, dims=['tile_id','pentad','angle','pol','orbit'])
 
-    data = xr.Dataset({'m_obs':darr.astype('float32'),
-                       's_obs': darr.astype('float32'),
-                       'm_mod':darr.astype('float32'),
-                       's_mod': darr.astype('float32'),
-                       'N_data':darr.astype('int32')})
-
     # ----- calculate mean and reshuffle -----
-    for i,til in enumerate(tiles):
-        logging.info(f'{i} / {len(tiles)}')
-        for pol in pols:
-            for ang in angles:
-                for orb1, orb2 in zip(orbits[0], orbits[1]):
-                    col, row = ios[0].grid.tileid2colrow(til)
-                    if sensor.upper() == 'SMOSSMAP':
-                        spcs = [io.get_species(pol=pol, ang=ang, orbit=orb) for io, orb in zip(ios,[orb1, orb2])]
-                        # orb = orb2 if scale_target == 'SMAP' else orb1 # POSSIBLY WRONG!!!!
+    for i_til, til in enumerate(tiles):
+        logging.info(f'{i_til} / {len(tiles)}')
+        for i_pol, pol in enumerate(pols):
+            # for i_ang, ang in enumerate(angles):
+            ang = angles[0]
+            for i_orb, (orb1, orb2) in enumerate(zip(orbits[0], orbits[1])):
+                col, row = ios[0].grid.tileid2colrow(til)
+                if sensor.upper() == 'SMOSSMAP':
+                    spcs = [io.get_species(pol=pol, ang=ang, orbit=orb) for io, orb in zip(ios,[orb1, orb2])]
+                    # orb = orb2 if scale_target == 'SMAP' else orb1 # POSSIBLY WRONG!!!!
+                    orb = orb1 if scale_target == 'SMAP' else orb2
+                else:
+                    spcs = [ios[0].get_species(pol=pol, ang=ang, orbit=orb1)]
+                    if sensor.upper() == 'SMAP':
                         orb = orb1 if scale_target == 'SMAP' else orb2
                     else:
-                        spcs = [ios[0].get_species(pol=pol, ang=ang, orbit=orb1)]
-                        if sensor.upper() == 'SMAP':
-                            orb = orb1 if scale_target == 'SMAP' else orb2
-                        else:
-                            orb = orb2 if scale_target == 'SMAP' else orb1
+                        orb = orb2 if scale_target == 'SMAP' else orb1
 
-                    if use_pc and (sensor == 'SMOSSMAP'):
-                        dss = [io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
-                        obs = PCA(*dss, window=1.5)['PC-1']
-                        dss = [io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
-                        mod = PCA(*dss, window=1.5)['PC-1']
-                    else:
-                        obs = pd.concat([io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
-                        mod = pd.concat([io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
+                if use_pc and (sensor == 'SMOSSMAP'):
+                    dss = [io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
+                    obs = PCA(*dss, window=1.5)['PC-1']
+                    dss = [io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]
+                    mod = PCA(*dss, window=1.5)['PC-1']
+                else:
+                    obs = pd.concat([io.timeseries['obs_obs'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
+                    mod = pd.concat([io.timeseries['obs_fcst'][:, spc-1, row, col].to_series() for io, spc in zip(ios,spcs)]).sort_index()
 
-                    if (len(obs) == 0) | (len(mod) == 0):
-                        continue
+                if (len(obs) == 0) | (len(mod) == 0):
+                    continue
 
-                    if mode == 'longterm':
-                        obs_clim = calc_anomaly(obs, longterm=True, output='climatology')
-                        mod_clim = calc_anomaly(mod, longterm=True, output='climatology')
-                        obs_scl_clim = obs - obs_clim + mod_clim
-                        obs_anom = calc_anom(obs_scl_clim, longterm=False)
-                        mod_anom = calc_anom(mod, longterm=False)
-                        m_obs = (obs_clim + obs_anom).resample('1D').mean().replace(np.nan, -9999)
-                        m_mod = (mod_clim + mod_anom).resample('1D').mean().replace(np.nan, -9999)
-                        for idx in m_obs.index:
-                            data['m_obs'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_obs[idx]
-                            data['s_obs'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_obs[idx]
-                            data['m_mod'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_mod[idx]
-                            data['s_mod'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = m_mod[idx]
-                            data['N_data'].loc[dict(tile_id=til, pol=pol, angle=ang, orbit=orb, year=idx.year, doy=idx.dayofyear)] = 999
-                    elif mode == 'shortterm':
-                        for yr in years:
-                            data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
-                            data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(obs[obs.index.year==yr][date_from:date_to])
-                            data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:],\
-                            data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = calc_clim_p(mod[mod.index.year==yr][date_from:date_to])
-                            data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb, year=yr)[:] = len(obs[obs.index.year==yr][date_from:date_to].dropna())
-                    else:
-                        data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
-                        data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(obs[date_from:date_to])
-                        data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
-                        data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(mod[date_from:date_to])
-                        data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = len(obs[date_from:date_to].dropna())
+                if mode == 'longterm':
+                    obs_clim = calc_anom(obs, return_clim=True)
+                    mod_clim = calc_anom(mod, return_clim=True)
+                    obs_anom = calc_anom(obs, mode='shortterm')
+                    mod_anom = calc_anom(mod, mode='shortterm')
+                    m_obs = (obs_clim + obs_anom).resample('1D').mean()
+                    m_mod = (mod_clim + mod_anom).resample('1D').mean()
+                    i_yr = m_obs.index.year.values - years.min()
+                    i_doy = m_obs.index.dayofyear.values - 1
+                    data_obs[i_til, i_doy, i_yr, i_pol, i_orb] = m_obs.replace(np.nan, -9999.).values
+                    data_mod[i_til, i_doy, i_yr, i_pol, i_orb] = m_mod.replace(np.nan, -9999.).values
+                elif mode == 'shortterm':
+                    for i_yr, yr in enumerate(years):
+                        data_obs[i_til, :, i_yr, i_pol, i_orb] = calc_clim_p(obs[obs.index.year==yr][date_from:date_to])[0].replace(np.nan, -9999.).values
+                        data_mod[i_til, :, i_yr, i_pol, i_orb] = calc_clim_p(mod[mod.index.year==yr][date_from:date_to])[0].replace(np.nan, -9999.).values
+                        n_data[i_til, :, i_yr, i_pol, i_orb] = len(obs[obs.index.year==yr][date_from:date_to].dropna())
+                else:
+                    # TODO: Doesn't work currently!
+                    data['m_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
+                    data['s_obs'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(obs[date_from:date_to])
+                    data['m_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:],\
+                    data['s_mod'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = calc_clim_p(mod[date_from:date_to])
+                    data['N_data'].sel(tile_id=til, pol=pol, angle=ang, orbit=orb)[:] = len(obs[date_from:date_to].dropna())
 
     modes = np.array([0, 0])
     sdate = np.array([date_from.year, date_from.month, date_from.day, 0, 0])
     edate = np.array([date_to.year, date_to.month, date_to.day, 0, 0])
     lengths = np.array([len(tiles), len(angles), 1])  # tiles, incidence angles, whatever
 
+    np.save('/Users/u0116961/data_sets/data_mod', data_mod)
+    np.save('/Users/u0116961/data_sets/data_obs', data_obs)
+
     # ----- write output files -----
     if mode == 'longterm':
-        for orb in orbits[0]:
+        for i_orb, orb in enumerate(orbits[0]):
             # !!! inconsistent with the definition in the obs_paramfile (species) !!!
             modes[0] = 1 if orb == 'A' else 0
-            for yr in years:
-                for doy in doys:
+            for i_yr, yr in enumerate(years):
+                for i_doy, doy in enumerate(doys):
                     res = template.copy()
-                    for ang in angles:
-                        for pol in pols:
-                            res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
-                            res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
-                            res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
-                            res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
-                            res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, doy=doy, year=yr).to_series()
+                    # for i_ang, ang in enumerate(angles):
+                    ang = angles[0]
+                    for i_pol, pol in enumerate(pols):
+                        res.loc[:, f'm_obs_{pol}_{ang}'] = data_obs[:, i_doy, i_yr, i_pol, i_orb].astype('float32')
+                        res.loc[:, f's_obs_{pol}_{ang}'] = data_obs[:, i_doy, i_yr, i_pol, i_orb].astype('float32')
+                        res.loc[:, f'm_mod_{pol}_{ang}'] = data_mod[:, i_doy, i_yr, i_pol, i_orb].astype('float32')
+                        res.loc[:, f's_mod_{pol}_{ang}'] = data_mod[:, i_doy, i_yr, i_pol, i_orb].astype('float32')
+                        res.loc[:, f'N_data_{pol}_{ang}'] = 999
                     res.replace(np.nan, -9999, inplace=True)
                     fdir = froot / f'y{yr:04}'
                     if not fdir.exists():
@@ -261,20 +262,20 @@ def run(args, scale_target='SMAP', mode='longterm', use_pc=False):
                         ios[0].write_fortran_block(fid, res[f].values)
                     fid.close()
     else:
-        for pent in pentads:
-            for orb in orbits[0]:
+        for i_pent, pent in enumerate(pentads):
+            for i_orb, orb in enumerate(orbits[0]):
                 # !!! inconsistent with the definition in the obs_paramfile (species) !!!
                 modes[0] = 1 if orb == 'A' else 0
                 if mode == 'shortterm':
-                    for yr in years:
+                    for i_yr, yr in enumerate(years):
                         res = template.copy()
                         for ang in angles:
-                            for pol in pols:
-                                res.loc[:, f'm_obs_{pol}_{ang}'] = data['m_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                                res.loc[:, f's_obs_{pol}_{ang}'] = data['s_obs'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                                res.loc[:, f'm_mod_{pol}_{ang}'] = data['m_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                                res.loc[:, f's_mod_{pol}_{ang}'] = data['s_mod'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
-                                res.loc[:, f'N_data_{pol}_{ang}'] = data['N_data'].sel(pol=pol, angle=ang, orbit=orb, pentad=pent, year=yr).to_series()
+                            for i_pol, pol in enumerate(pols):
+                                res.loc[:, f'm_obs_{pol}_{ang}'] = data_obs[:, i_pent, i_yr, i_pol, i_orb].astype('float32')
+                                res.loc[:, f's_obs_{pol}_{ang}'] = data_obs[:, i_pent, i_yr, i_pol, i_orb].astype('float32')
+                                res.loc[:, f'm_mod_{pol}_{ang}'] = data_mod[:, i_pent, i_yr, i_pol, i_orb].astype('float32')
+                                res.loc[:, f's_mod_{pol}_{ang}'] = data_mod[:, i_pent, i_yr, i_pol, i_orb].astype('float32')
+                                res.loc[:, f'N_data_{pol}_{ang}'] = n_data[:, i_pent, i_yr, i_pol, i_orb].astype('int32')
                         res.replace(np.nan, -9999, inplace=True)
                         fname = froot / f'{fbase}_{orb}_p{pent:02}_y{yr:04}.bin'
                         fid = open(fname, 'wb')
@@ -333,14 +334,14 @@ def replace_angle_field():
 if __name__ == '__main__':
 
     # 'SMOS' / 'SMAP' / 'SMOSSMAP'
-    args = ('SMAP', '2015-04-01', '2021-04-01', 'Pcorr')
+    args = ('SMAP', '2015-04-01', '2021-04-01', 'noPcorr')
     run(args, scale_target='SMAP', mode='longterm')
 
     # replace_angle_field()
 
 '''
 from myprojects.experiments.LDAS.scaling.create_scaling_parameters import run
-args = ('SMAP', '2015-04-01', '2021-04-01', 'Pcorr')
+args = ('SMAP', '2015-04-01', '2021-04-01', 'noPcorr')
 run(args, scale_target='SMAP', mode='longterm')
 
 '''

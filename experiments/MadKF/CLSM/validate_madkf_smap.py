@@ -32,7 +32,7 @@ from validation_good_practice.plots import plot_ease_img
 
 def run_ascat_eval(n_procs=1):
 
-    res_path = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation').expanduser()
+    res_path = Path(f'~/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_all').expanduser()
     if not res_path.exists():
         Path.mkdir(res_path, parents=True)
 
@@ -61,7 +61,7 @@ def run_ascat_eval_part(part, parts, ref='ascat'):
     from myprojects.timeseries import calc_anom
     from validation_good_practice.ancillary.paths import Paths
 
-    res_path = Path('~/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation').expanduser()
+    res_path = Path('~/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_all').expanduser()
     if not res_path.exists():
         Path.mkdir(res_path, parents=True)
 
@@ -81,11 +81,25 @@ def run_ascat_eval_part(part, parts, ref='ascat'):
     # Look-up table that contains the grid cells to iterate over
     lut = lut.iloc[start:end, :]
 
-    names = ['OL_Pcorr', 'OL_noPcorr'] + \
-            [f'DA_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
 
-    runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr' ] + \
-        [f'NLv4_M36_US_DA_SMAP_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
+    root = Path('/Users/u0116961/data_sets/GEOSldas_runs')
+
+    runs = [run.name for run in root.glob('*_DA_SMAP_*')]
+    names = [run[20::] for run in runs]
+
+    runs += ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr']
+    names += ['Pcorr_OL', 'noPcorr_OL']
+
+    # names = ['OL_Pcorr', 'OL_noPcorr'] + \
+    #         [f'DA_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
+    # runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr' ] + \
+    #     [f'NLv4_M36_US_DA_SMAP_{pc}_{err}' for pc in ['Pcorr','noPcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st']]
+
+    # names = ['OL_Pcorr', 'DA_Pcorr_LTST'] + \
+    #         [f'DA_{pc}_{err}{mode}' for pc in ['Pcorr'] for err in ['4K','anom_lt', 'anom_lt_ScYH', 'anom_lst','anom_st'] for mode in ['', '_ScDY', '_ScYH']]
+    #
+    # runs = ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_DA_Pcorr_LTST'] + \
+    #     [f'NLv4_M36_US_DA_SMAP_{pc}_{err}{mode}' for pc in ['Pcorr'] for err in ['4K','abs','anom_lt','anom_lst','anom_st'] for mode in ['', '_ScDY', '_ScYH']]
 
     dss = [GEOSldas_io('tavg3_1d_lnr_Nt', run).timeseries if 'DA' in run else GEOSldas_io('SMAP_L4_SM_gph', run).timeseries for run in runs]
     grid = GEOSldas_io('ObsFcstAna', runs[0]).grid
@@ -129,11 +143,11 @@ def run_ascat_eval_part(part, parts, ref='ascat'):
         for mode in modes:
 
             if mode == 'anom_lst':
-                ts_ref = calc_anom(ts_ascat.copy(), longterm=True).dropna()
+                ts_ref = calc_anom(ts_ascat.copy(), mode='climatological').dropna()
             elif mode == 'anom_st':
-                ts_ref = calc_anom(ts_ascat.copy(), longterm=False).dropna()
+                ts_ref = calc_anom(ts_ascat.copy(), mode='shortterm').dropna()
             elif mode == 'anom_lt':
-                ts_ref = (calc_anom(ts_ascat.copy(), longterm=True) - calc_anom(ts_ascat.copy(), longterm=False)).dropna()
+                ts_ref = calc_anom(ts_ascat.copy(), mode='longterm').dropna()
             else:
                 ts_ref = ts_ascat.dropna()
 
@@ -158,11 +172,11 @@ def run_ascat_eval_part(part, parts, ref='ascat'):
                 ts_mod = ts_mod.reindex(ind_valid)
 
                 if mode == 'anom_lst':
-                    ts_mod = calc_anom(ts_mod.copy(), longterm=True).dropna()
+                    ts_mod = calc_anom(ts_mod.copy(), mode='climatological').dropna()
                 elif mode == 'anom_st':
-                    ts_mod = calc_anom(ts_mod.copy(), longterm=False).dropna()
+                    ts_mod = calc_anom(ts_mod.copy(), mode='shortterm').dropna()
                 elif mode == 'anom_lt':
-                    ts_mod = (calc_anom(ts_mod.copy(), longterm=True) - calc_anom(ts_mod.copy(), longterm=False)).dropna()
+                    ts_mod = calc_anom(ts_mod.copy(), mode='longterm').dropna()
                 else:
                     ts_mod = ts_mod.dropna()
                 ts_mod = ts_mod.resample('1d').mean()
@@ -820,7 +834,7 @@ def plot_eval():
 
 
 
-def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, fontsize=12, col_offs=0):
+def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, pad=0.03, wdth=0.03, fontsize=12, col_offs=0):
 
     f.subplots_adjust(wspace=wspace, hspace=hspace, bottom=bottom)
 
@@ -835,7 +849,7 @@ def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, fo
         x1 = pos.x0
         x2 = pos.x1
 
-    cbar_ax = f.add_axes([x1, 0.03, x2 - x1, 0.03])
+    cbar_ax = f.add_axes([x1, pad, x2 - x1, wdth])
     cbar = f.colorbar(im, orientation='horizontal', cax=cbar_ax)
     for t in cbar.ax.get_xticklabels():
         t.set_fontsize(fontsize)
@@ -918,14 +932,13 @@ def plot_ascat_smap_eval(iteration):
 
 if __name__=='__main__':
 
-    # run_ascat_eval(n_procs=36)
-    # run_ascat_eval_part(15,36)
-
+    run_ascat_eval(n_procs=36)
+    # run_ascat_eval_part(1,1)
 
     # run_insitu_eval_smos(n_procs=14)
     # run_insitu_eval_smos_part(3, 14)
 
-    plot_eval()
+    # plot_eval()
     # scatterplot_abs_vs_anom()
     # scatterplot_gain_vs_skill()
 
@@ -941,6 +954,6 @@ if __name__=='__main__':
 
 '''
 from myprojects.experiments.MadKF.CLSM.validate_madkf_smap import run_ascat_eval
-run_ascat_eval(n_procs=30)
+run_ascat_eval(n_procs=35)
 
 '''

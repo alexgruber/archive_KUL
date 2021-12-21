@@ -14,7 +14,7 @@ from mpl_toolkits.basemap import Basemap
 import seaborn as sns
 sns.set_context('talk', font_scale=0.8)
 
-from pyldas.interface import LDAS_io
+from pyldas.interface import GEOSldas_io, LDASsa_io
 
 from myprojects.timeseries import calc_clim_harmonic, calc_clim_moving_average
 from pytesmo.time_series.anomaly import calc_anomaly, calc_climatology
@@ -62,9 +62,9 @@ def plot_innov_ts_example():
 def plot_scaling_parameters():
 
     # fname = '/Users/u0116961/data_sets/LDASsa_runs/scaling_files/Thvf_TbSM_001_src_SMOSSMAP_trg_SMAP_2015_p19_2020_p19_W_9p_Nmin_20_A_p12.bin'
-    fname = '/Users/u0116961/data_sets/LDASsa_runs/scaling_files_yearly2/Thvf_TbSM_001_src_SMOSSMAP_trg_SMAP_2015_p19_2020_p19_W_9p_Nmin_20_A_p12_y2016.bin'
+    fname = '/Users/u0116961/data_sets/GEOSldas_runs/_scaling_files_Pcorr_daily/y2020/Thvf_TbSM_001_src_SMAP_trg_SMAP_2015_p19_2021_p19_W_9p_Nmin_20_D_d340.bin'
 
-    io = LDAS_io('scaling ')
+    io = LDASsa_io('scaling')
 
     res = io.read_scaling_parameters(fname=fname)
 
@@ -209,6 +209,6 @@ def plot_Tb_clims():
 
 if __name__=='__main__':
 
-    # plot_scaling_parameters()
-    plot_Tb_clims()
+    plot_scaling_parameters()
+    # plot_Tb_clims()
     # plot_innov_ts_example()

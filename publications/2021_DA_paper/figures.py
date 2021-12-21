@@ -60,12 +60,12 @@ def plot_potential_skillgain_simple(dir_out):
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
 
-def plot_actual_skillgain(dir_out):
+def plot_actual_skillgain(res_path, dir_out):
 
     runs = [f'DA_Pcorr_{err}' for err in ['abs','anom_lst','anom_lt','anom_st']]
     titles = ['R$_{Total}$ - R$_{OL}$', 'R$_{Anomaly}$ - R$_{OL}$', 'R$_{LF}$ - R$_{OL}$', 'R$_{HF}$ - R$_{OL}$']
 
-    res = pd.read_csv(Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/ascat_eval.csv'), index_col=0)
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
     res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
     m = 'abs'
 
@@ -118,8 +118,12 @@ def plot_potential_skillgain_decomposed(dir_out):
     R_clim = (R_abs - R_anom_lt - R_anom_st).abs()
     P_clim = (P_abs - P_anom_lt - P_anom_st).abs()
 
+    R23_arr = (R_anom_lst - (R_anom_lt + R_anom_st)) / 2
+    P23_arr = (P_anom_lst - (P_anom_lt + P_anom_st)) / 2
+
     # Baseline estimates
-    R2 = res[f'r2_grid_abs_m_CLSM_tc_ASCAT_SMAP_CLSM']
+    # R2 = res[f'r2_grid_abs_m_CLSM_tc_ASCAT_SMAP_CLSM']
+    R2 = res[f'r2_grid_anom_lst_m_CLSM_tc_ASCAT_SMAP_CLSM']
     SNR = R2 / (1 - R2)
     SIG = SNR * P_abs
 
@@ -140,22 +144,29 @@ def plot_potential_skillgain_decomposed(dir_out):
         P33 = P_anom_st.loc[i]
 
         r_c_l = 0.5
-        r_c_s = 0.5
-        r_l_s = 0.5
+        r_c_s = 0.2
+        r_l_s = 0.2
 
         R12 = r_c_l * np.sqrt(R11 * R22)
         R13 = r_c_s * np.sqrt(R11 * R33)
-        R23 = r_l_s * np.sqrt(R22 * R33)
+        # R23 = r_l_s * np.sqrt(R22 * R33)
         P12 = r_c_l * np.sqrt(P11 * P22)
         P13 = r_c_s * np.sqrt(P11 * P33)
-        P23 = r_l_s * np.sqrt(P22 * P33)
+        # P23 = r_l_s * np.sqrt(P22 * P33)
 
-        S = np.matrix([[R11, R12, R13, 0,   0,   0  ],
-                       [R12, R22, R23, 0,   0,   0  ],
-                       [R13, R23, R33, 0,   0,   0  ],
-                       [0,   0,   0,   P11, P12, P13],
-                       [0,   0,   0,   P12, P22, P23],
-                       [0,   0,   0,   P13, P23, P33]])
+        R23 = R23_arr[i]
+        P23 = P23_arr[i]
+
+        # S = np.matrix([[R11, R12, R13, 0,   0,   0  ],
+        #                [R12, R22, R23, 0,   0,   0  ],
+        #                [R13, R23, R33, 0,   0,   0  ],
+        #                [0,   0,   0,   P11, P12, P13],
+        #                [0,   0,   0,   P12, P22, P23],
+        #                [0,   0,   0,   P13, P23, P33]])
+        S = np.matrix([[R22, R23 ,  0,   0  ],
+                       [R23, R33,   0,   0  ],
+                       [0,   0,   P22, P23],
+                       [0,   0,   P23, P33]])
 
         for mode in modes:
 
@@ -163,7 +174,10 @@ def plot_potential_skillgain_decomposed(dir_out):
             R = res.loc[i, f'ubrmse_grid_{mode}_m_SMAP_tc_ASCAT_SMAP_CLSM'] ** 2
             K = P / (R + P)
 
-            A = np.matrix([K, K, K, 1-K, 1-K, 1-K])
+            # A = np.matrix([K, K, K, 1-K, 1-K, 1-K])
+            A = np.matrix([K, K, 1-K, 1-K])
+
+
             P_upd = (A * S * A.T)[0,0]
 
             NSR_upd = P_upd / SIG.loc[i]
@@ -230,9 +244,9 @@ def plot_station_locations(dir_out):
 
 #    plt.tight_layout()
 
-def plot_ismn_vs_ascat(dir_out):
+def plot_ismn_vs_ascat(res_path, dir_out):
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/insitu_TCA.csv', index_col=0)
+    res = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
     res.index = res.network
     res.drop('network', axis='columns', inplace=True)
 
@@ -242,15 +256,18 @@ def plot_ismn_vs_ascat(dir_out):
     lats = res['latitude'].values
     lons = res['longitude'].values
 
-    res_asc = pd.read_csv(Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/ascat_eval.csv'), index_col=0)
-    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
-
-    run_ol = 'OL_Pcorr'
-    run_da = 'DA_Pcorr_anom_st'
-
-    fontsize = 16
+    res_asc = pd.read_csv(Path(res_path / 'ascat_eval.csv'), index_col=0)
+    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
 
     mode = 'anom_st'
+
+    run_ol = 'Pcorr_OL'
+    # run_ol = 'Pcorr_4K'
+
+    # run_da = f'DA_Pcorr_{mode}'
+    run_da = f'Pcorr_LTST'
+
+    fontsize = 16
 
     f = plt.figure(figsize=(14,5))
 
@@ -271,9 +288,8 @@ def plot_ismn_vs_ascat(dir_out):
 
     res_asc['diff'] = res_asc[col_da] - res_asc[col_ol]
 
-    im = plot_ease_img(res_asc.reindex(ind_valid), 'diff', title='R$_{HF}$ - R$_{OL}$', cmap=cc.cm.bjy, cbrange=[-0.15, 0.15],
+    im = plot_ease_img(res_asc.reindex(ind_valid), 'diff', title='R$_{LTST}$ - R$_{OL}$', cmap=cc.cm.bjy, cbrange=[-0.15, 0.15],
                        fontsize=fontsize, print_median=True, plot_cb=True)
-
 
     ax = plt.subplot(1,2,2)
     llcrnrlat = 24
@@ -288,14 +304,14 @@ def plot_ismn_vs_ascat(dir_out):
     xs, ys = m(lons, lats)
     c = res[f'R2_model_{run_da}_{mode}_sm_surface'].values - res[f'R2_model_{run_ol}_{mode}_sm_surface'].values
     sc = plt.scatter(xs, ys, c=c, s=30, label='R2', vmin=-0.15, vmax=0.15, cmap=cc.cm.bjy)
-    plt.title('R$_{HF,ISMN}$ - R$_{OL,ISMN}$', fontsize=fontsize)
+    plt.title('R$_{LTST,ISMN}$ - R$_{OL,ISMN}$', fontsize=fontsize)
     cb = m.colorbar(sc, "bottom", size="7%", pad="5%")
     for t in cb.ax.get_xticklabels():
         t.set_fontsize(fontsize-2)
     x, y = m(-79, 25)
     plt.text(x, y, 'm. = %.3f' % np.nanmedian(c), fontsize=fontsize-4)
 
-    fout = dir_out / 'ismn_vs_ascat.png'
+    fout = dir_out / f'ismn_vs_ascat_{mode}.png'
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -304,9 +320,9 @@ def plot_ismn_vs_ascat(dir_out):
 
 
 
-def plot_ismn_statistics(dir_out):
+def plot_ismn_statistics(res_path, dir_out):
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/insitu_TCA.csv', index_col=0)
+    res = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
     res.index = res.network
     res.drop('network', axis='columns', inplace=True)
 
@@ -348,7 +364,7 @@ def plot_ismn_statistics(dir_out):
         f = plt.figure(figsize=(20,8))
 
         valss = [[[res[f'ubRMSD_model_insitu_{run}_{mode}_{var}'].values for run in runs] for var in variables],
-                 [[res[f'R2_model_insitu_{run}_{mode}_{var}'].values for run in runs] for var in variables],
+                 [[res[f'R_model_insitu_{run}_{mode}_{var}'].values for run in runs] for var in variables],
                  [[res[f'ubRMSE_model_{run}_{mode}_{var}'].values for run in runs] for var in variables],
                  [[np.sqrt(res[f'R2_model_{run}_{mode}_{var}'].values) for run in runs] for var in variables]]
 
@@ -399,12 +415,12 @@ def plot_ismn_statistics(dir_out):
 
 
 
-def plot_ascat_eval_uncorrected(dir_out):
+def plot_ascat_eval_uncorrected(res_path, dir_out):
 
     runs = ['OL_noPcorr'] + [f'DA_noPcorr_{err}' for err in ['4K','abs','anom_lst','anom_lt','anom_st']]
     titles = ['R$_{OL}$', 'R$_{4K}$ - R$_{OL}$', 'R$_{Total}$ - R$_{4K}$', 'R$_{Anomaly}$ - R$_{4K}$', 'R$_{LF}$ - R$_{4K}$', 'R$_{HF}$ - R$_{4K}$']
 
-    res = pd.read_csv(Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/ascat_eval.csv'), index_col=0)
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
     res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
     modes = ['anom_st']
 
@@ -451,18 +467,18 @@ def plot_ascat_eval_uncorrected(dir_out):
         f.savefig(dir_out / f'ascat_eval_{m}_uncorr.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-def plot_ascat_eval(dir_out):
+def plot_ascat_eval(res_path, dir_out):
 
     runs = ['OL_Pcorr'] + [f'DA_Pcorr_{err}' for err in ['4K','abs','anom_lst','anom_lt','anom_st']]
     titles = ['R$_{OL}$', 'R$_{4K}$ - R$_{OL}$', 'R$_{Total}$ - R$_{4K}$', 'R$_{Anomaly}$ - R$_{4K}$', 'R$_{LF}$ - R$_{4K}$', 'R$_{HF}$ - R$_{4K}$']
 
-    res = pd.read_csv(Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/ascat_eval.csv'), index_col=0)
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
     res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
     modes = ['abs', 'anom_lst', 'anom_lt','anom_st']
 
     cb_r = [0.2, 1]
-    cb_diff_ol =  [-0.2, 0.2]
-    cb_diff_da = [-0.06, 0.06]
+    cb_diff_ol =  [-0.1, 0.1]
+    cb_diff_da = [-0.1, 0.1]
 
     fontsize = 14
 
@@ -770,9 +786,9 @@ def plot_freq_components():
 
     clim = calc_climatology(ts)
 
-    anom_lt = calc_anom(ts.copy(), longterm=True) - calc_anom(ts.copy(),longterm=False)
-    anom_st = calc_anom(ts.copy(), longterm=False)
-    clim = ts - anom_lt - anom_st
+    anom_lt = calc_anom(ts, mode='longterm')
+    anom_st = calc_anom(ts, mode='shortterm')
+    clim = calc_anom(ts, return_clim=True)
 
     df = pd.concat((ts, clim, anom_st, anom_lt), axis=1)
     df.columns = ['total signal', 'climatology', 'high-frequency signal', 'low-frequency signal']
@@ -936,18 +952,6 @@ def plot_tca_uncertainty_ratio(dir_out):
 
     plot_centered_cbar(f, im_r, 4, fontsize=fontsize-2)
 
-    # f.subplots_adjust(wspace=0.05, hspace=0, bottom=0.1)
-    #
-    # ticks = np.arange(cb[0], cb[1]+0.001, 0.02)
-    #
-    # x1 = (pos[0].x0 + pos[0].x1) / 2
-    # x2 = (pos[1].x0 + pos[1].x1) / 2
-    #
-    # cbar_ax = f.add_axes([x1, 0.07, x2-x1, 0.03])
-    # cb = f.colorbar(im_r, orientation='horizontal', cax=cbar_ax, ticks=ticks)
-    # for t in cb.ax.get_xticklabels():
-    #     t.set_fontsize(fontsize-2)
-
     fout = dir_out / 'tca_uncertainty_ratio.png'
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
@@ -997,22 +1001,298 @@ def plot_ensvar_ratio(dir_out):
     plt.close()
 
 
+def plot_ascat_eval_absolute(res_path, dir_out):
+
+    runs = ['Pcorr_OL'] + [f'Pcorr_{err}' for err in ['4K','anom_lst', 'LTST', 'anom_lt_ScDY','anom_st_ScYH']]
+    # runs = ['noPcorr_OL'] + [f'noPcorr_{err}' for err in ['4K','anom_lst', 'LTST', 'anom_lt','anom_st_ScYH']]
+    titles = ['R$_{OL}$', 'R$_{4K}$', 'R$_{LF + HF}$', 'R$_{LF, HF}$', 'R$_{LF}$', 'R$_{HF}$']
+
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
+
+    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    # res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
+
+    modes = ['anom_lst', 'anom_lt','anom_st']
+
+    cb_r = [0.2, 1]
+    # cb_diff1 = [-0.2, 0.2]
+    # cb_diff2 = [-0.04, 0.04]
+
+    fontsize = 14
+
+    f = plt.figure(figsize=(24,7))
+
+    for i, m in enumerate(modes):
+
+        for cnt, (r, tit) in enumerate(zip(runs,titles)):
+
+            ax = plt.subplot(3, 6, i * 6 + cnt + 1)
+
+            col = f'ana_r_corr_{r}_{m}'
+
+            res[col][res[col] < 0] = 0
+            res[col][res[col] > 1] = 1
+
+            if i == 0:
+                title = tit
+            else:
+                title = ''
+
+            if cnt == 0:
+                if i == 0:
+                    ylabel = 'Anomalies'
+                elif i == 1:
+                    ylabel = 'LF signal'
+                else:
+                    ylabel = 'HF signal'
+            else:
+                ylabel = ''
+
+            r_asc_smap = res_tc[f'r_grid_{m}_p_ASCAT_SMAP']
+            r_asc_clsm = res_tc[f'r_grid_{m}_p_ASCAT_CLSM']
+            r_smap_clsm = res_tc[f'r_grid_{m}_p_SMAP_CLSM']
+            thres = 0.2
+            ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
+
+            # if j < 2:
+            im = plot_ease_img(res.reindex(ind_valid), col , title=title, cmap='viridis', cbrange=cb_r, fontsize=fontsize, print_median=True, plot_cb=False)
+            ax.set_ylabel(ylabel)
+            # else:
+            #     cbr = cb_diff1 if m != 'anom_st' else cb_diff2
+            #     im = plot_ease_img(res.reindex(ind_valid), col , title=title, cmap=cc.cm.bjy, cbrange=cbr, fontsize=fontsize, print_median=True, plot_cb=False)
+
+        plot_centered_cbar(f, im, 6, fontsize=fontsize-2)
+
+    f.savefig(dir_out / f'ascat_eval_abs_Pcorr.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_ascat_eval_relative(res_path, dir_out):
+
+    ref = 'Pcorr_4K'
+    if '4K' in ref:
+        lab = 'R$_{TC}$ - R$_{4K}$'
+    else:
+        lab = 'R$_{TC}$ - R$_{OL}$'
+
+    runs = [f'Pcorr_{err}' for err in ['anom_lst', 'anom_lt_ScDY','anom_st_ScYH', 'LTST']]
+    # runs = ['noPcorr_OL'] + [f'noPcorr_{err}' for err in ['4K','anom_lst', 'LTST', 'anom_lt','anom_st_ScYH']]
+    titles = ['Anomaly assimilation', 'LF assimilation', 'HF assimilation', 'LF + HF assimilation']
+    # labels = [f'{lab} (Anom.)', f'{lab} (LF)', f'{lab} (HF)']
+    labels = [f'Anomaly skill', f'LF skill', f'HF skill']
+
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
+
+    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    # res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/noPcorr/result.csv', index_col=0)
+
+    modes = ['anom_lst', 'anom_lt','anom_st']
+
+    cb_r = [-0.2, 0.2]
+
+    fontsize = 14
+
+    f = plt.figure(figsize=(20,8))
+
+    for i, (m, label) in enumerate(zip(modes,labels)):
+
+        ref_col = f'ana_r_corr_{ref}_{m}'
+
+        res[ref_col][res[ref_col] < 0] = 0
+        res[ref_col][res[ref_col] > 1] = 1
+
+        for cnt, (r, tit) in enumerate(zip(runs,titles)):
+
+            ax = plt.subplot(3, 4, i * 4 + cnt + 1)
+
+            col = f'ana_r_corr_{r}_{m}'
+
+            res[col][res[col] < 0] = 0
+            res[col][res[col] > 1] = 1
+
+            res['diff'] = res[col] - res[ref_col]
+
+            if i == 0:
+                title = tit
+            else:
+                title = ''
+
+            if cnt == 0:
+                ylabel = label
+            else:
+                ylabel = ''
+
+            r_asc_smap = res_tc[f'r_grid_{m}_p_ASCAT_SMAP']
+            r_asc_clsm = res_tc[f'r_grid_{m}_p_ASCAT_CLSM']
+            r_smap_clsm = res_tc[f'r_grid_{m}_p_SMAP_CLSM']
+            thres = 0.2
+            ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
+
+            # if j < 2:
+            im = plot_ease_img(res.reindex(ind_valid), 'diff' , title=title, cmap=cc.cm.bjy, cbrange=cb_r, fontsize=fontsize, print_median=True, plot_cb=False)
+            ax.set_ylabel(ylabel)
+            # else:
+            #     cbr = cb_diff1 if m != 'anom_st' else cb_diff2
+            #     im = plot_ease_img(res.reindex(ind_valid), col , title=title, cmap=cc.cm.bjy, cbrange=cbr, fontsize=fontsize, print_median=True, plot_cb=False)
+
+        plot_centered_cbar(f, im, 4, fontsize=fontsize-2)
+
+    f.savefig(dir_out / f'ascat_eval_rel_{ref}.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_ismn_statistics_new(res_path, dir_out):
+
+    res = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
+    res.index = res.network
+    res.drop('network', axis='columns', inplace=True)
+
+    variables = ['sm_surface', 'sm_rootzone']
+    var_labels = ['surface', 'root-zone']
+
+    pc = 'Pcorr'
+
+    runs = [f'OL_{pc}'] + [f'DA_{pc}_{err}' for err in ['4K', 'anom_lst', 'anom_lt', 'anom_st']]
+    run_labels = ['Open-loop', '4K benchmark', 'Anomalies', 'LF signal', 'HF signal']
+
+    networks  = ['SCAN', 'USCRN']
+    res = res.loc[res.index.isin(networks),:]
+
+
+    modes = ['anom_lst', 'anom_lt', 'anom_st']
+
+    var = 'sm_surface'
+
+    f = plt.figure(figsize=(15,12))
+
+    lim = [-0.2,0.2]
+    lim2 = [-0.05,0.05]
+
+    for i, mode in enumerate(modes):
+
+        run_ol = f'OL_{pc}_{mode}'
+        run_4k = f'DA_{pc}_4K_{mode}'
+        run_tc = f'DA_{pc}_{mode}_{mode}'
+
+        ax = plt.subplot(3,3,i+1)
+        res['col'] = res[f'R_model_insitu_{run_4k}_{var}'] - res[f'R_model_insitu_{run_ol}_{var}']
+        res['col'].hist(bins=15, grid=False, ax=ax, range=lim)
+        plt.title(f'Corr: 4K - OL ({mode})')
+        plt.xlim(lim)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+
+        ax = plt.subplot(3,3,i+4)
+        res['col'] = res[f'R_model_insitu_{run_tc}_{var}'] - res[f'R_model_insitu_{run_ol}_{var}']
+        res['col'].hist(bins=15, grid=False, ax=ax, range=lim)
+        plt.title(f'Corr: TC - OL ({mode})')
+        plt.xlim(lim)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+        ax = plt.subplot(3,3,i+7)
+        res['col'] = res[f'R_model_insitu_{run_tc}_{var}'] - res[f'R_model_insitu_{run_4k}_{var}']
+        res['col'].hist(bins=15, grid=False, ax=ax, range=lim2)
+        plt.title(f'Corr: TC - 4K ({mode})')
+        plt.xlim(lim2)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_ascat_statistics_new(res_path, dir_out):
+
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
+    res_tc = pd.read_csv(
+        '/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+
+    pc = 'Pcorr'
+
+    run_labels = ['Open-loop', '4K benchmark', 'Anomalies', 'LF signal', 'HF signal']
+
+    modes = ['anom_lst', 'anom_lt', 'anom_st']
+
+    f = plt.figure(figsize=(15,12))
+
+    lim = [-0.2,0.2]
+    lim2 = [-0.05,0.05]
+
+    for i, mode in enumerate(modes):
+
+        col_ol = f'ana_r_corr_OL_{pc}_{mode}'
+        col_4k = f'ana_r_corr_DA_{pc}_4K_{mode}'
+        col_tc = f'ana_r_corr_DA_{pc}_{mode}_{mode}'
+
+        r_asc_smap = res_tc[f'r_grid_{mode}_p_ASCAT_SMAP']
+        r_asc_clsm = res_tc[f'r_grid_{mode}_p_ASCAT_CLSM']
+        r_smap_clsm = res_tc[f'r_grid_{mode}_p_SMAP_CLSM']
+        thres = 0.2
+        ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
+
+        res[col_ol][res[col_ol] < 0] = 0
+        res[col_4k][res[col_4k] < 0] = 0
+        res[col_tc][res[col_tc] < 0] = 0
+        res[col_ol][res[col_ol] > 1] = 1
+        res[col_4k][res[col_4k] > 1] = 1
+        res[col_tc][res[col_tc] > 1] = 1
+
+        ax = plt.subplot(3,3,i+1)
+        res['col'] = res[col_4k] - res[col_ol]
+        res['col'].reindex(ind_valid).hist(bins=15, grid=False, ax=ax, range=lim)
+        plt.title(f'Corr: 4K - OL ({mode})')
+        plt.xlim(lim)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+
+        ax = plt.subplot(3,3,i+4)
+        res['col'] = res[col_tc] - res[col_ol]
+        res['col'].reindex(ind_valid).hist(bins=15, grid=False, ax=ax, range=lim)
+        plt.title(f'Corr: TC - OL ({mode})')
+        plt.xlim(lim)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+        ax = plt.subplot(3,3,i+7)
+        res['col'] = res[col_tc] - res[col_4k]
+        res['col'].reindex(ind_valid).hist(bins=15, grid=False, ax=ax, range=lim2)
+        plt.title(f'Corr: TC - 4K ({mode})')
+        plt.xlim(lim2)
+        plt.axvline(color='black', linestyle='--', linewidth=1)
+
+    plt.tight_layout()
+    plt.show()
+
 if __name__=='__main__':
 
-    dir_out = Path('/Users/u0116961/Documents/publications/2021_ag_madkf_clsm/images')
+    # res_path_hflf = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation')
+    # res_path_hf = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_ScYH')
+    # res_path_lf = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_ScDY')
 
+    res_path = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_all')
+    dir_out = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots')
+    if not dir_out.exists():
+        Path.mkdir(dir_out, parents=True)
+
+    # if '_scyh' in str(dir_out):
+    #     res_path = res_path_hf
+    # elif '_scdy' in str(dir_out):
+    #     res_path = res_path_lf
+    # else:
+    #     res_path = res_path_hflf
+
+    # plot_freq_components()
     # plot_potential_skillgain_simple(dir_out)
-    # plot_actual_skillgain(dir_out)
+    # plot_actual_skillgain(res_path, dir_out)
     # plot_potential_skillgain_decomposed(dir_out)
     # plot_station_locations(dir_out)
-    # plot_ismn_vs_ascat(dir_out)
-    # plot_ismn_statistics(dir_out)
-    # plot_ascat_eval_uncorrected(dir_out)
-    # plot_ascat_eval(dir_out)
+    plot_ismn_vs_ascat(res_path, dir_out)
+    # plot_ismn_statistics(res_path, dir_out)
+    # plot_ascat_eval_uncorrected(res_path, dir_out)
+    # plot_ascat_eval(res_path, dir_out)
     # plot_filter_diagnostics(dir_out)
     # plot_perturbations(dir_out)
     # plot_sm_weight(dir_out)
     # plot_tca_uncertainties(dir_out)
     # plot_tca_uncertainty_CI(dir_out)
     # plot_tca_uncertainty_ratio(dir_out)
-    plot_ensvar_ratio(dir_out)
+    # plot_ensvar_ratio(dir_out)
+    # plot_ascat_eval_absolute(res_path, dir_out)
+    # plot_ascat_eval_relative(res_path, dir_out)
+    # plot_ismn_statistics_new(res_path, dir_out)
+    # plot_ascat_statistics_new(res_path, dir_out)

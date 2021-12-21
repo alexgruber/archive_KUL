@@ -256,8 +256,17 @@ def plot_ease_img2(data, tag,
     if title != '':
         plt.title(title,fontsize=fontsize)
 
+    # x, y = m(-79, 25)
+    # plt.text(x, y, 'mean=%.2f' % np.ma.mean(img_masked), fontsize=fontsize - 5)
+
+    x, y = m(-79, 27.5)
+    plt.text(x, y, 'mean', fontsize=fontsize - 5)
+    x, y = m(-74, 27.5)
+    plt.text(x, y, '   =%.2f' % np.ma.median(img_masked), fontsize=fontsize - 5)
     x, y = m(-79, 25)
-    plt.text(x, y, 'mean=%.2f' % np.ma.mean(img_masked), fontsize=fontsize - 5)
+    plt.text(x, y, 'std.', fontsize=fontsize - 5)
+    x, y = m(-74, 25)
+    plt.text(x, y, '   =%.2f' % np.ma.std(img_masked), fontsize=fontsize - 5)
 
     return im
 
