@@ -82,11 +82,13 @@ def ncfile_init(fname, dimensions, variables):
 
     return ds
 
-def reformat_MERRA2(dir_out):
+def reformat_MERRA2():
 
-    # root = Path('/staging/leuven/stg_00024/input/met_forcing/MERRA2_land_forcing/MERRA2_400/diag')
-    root = Path('/Users/u0116961/data_sets/MERRA2')
+    # root = Path('/Users/u0116961/data_sets/MERRA2')             )
+    root = Path('/staging/leuven/stg_00024/input/met_forcing/MERRA2_land_forcing/MERRA2_400/diag')
 
+    # dir_out = Path('/Users/u0116961/data_sets/MERRA2')
+    dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/MERRA2')
     fout = dir_out / 'MERRA2_images.nc'
 
     names = ['tavg1_2d_slv_Nx', 'tavg1_2d_lnd_Nx']
@@ -124,8 +126,11 @@ def reformat_MERRA2(dir_out):
 
 if __name__=='__main__':
 
-    dir_out = Path('/Users/u0116961/data_sets/MERRA2')
-    reformat_MERRA2(dir_out)
+    reformat_MERRA2()
 
+'''
+import sys
+sys.path.append('/data/leuven/320/vsc32046/python/')
+from myprojects.publications.deforestation_paper.preprocessing import reformat_MERRA2
 
-
+'''
