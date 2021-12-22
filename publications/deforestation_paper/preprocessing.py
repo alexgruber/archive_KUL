@@ -6,6 +6,7 @@ from pathlib import Path
 from netCDF4 import Dataset, date2num
 from collections import OrderedDict
 
+from pyldas.grids import EASE2
 
 def get_roi():
     latmin= -56.
@@ -91,6 +92,9 @@ def reformat_MERRA2():
     dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/MERRA2')
     fout = dir_out / 'MERRA2_images.nc'
 
+    if not dir_out.exists():
+        Path.mkdir(dir_out, parents=True)
+
     names = ['tavg1_2d_slv_Nx', 'tavg1_2d_lnd_Nx']
     vars_slv = ['T2M']
     vars_lnd = ['PRECTOTLAND','LWLAND', 'SWLAND', 'SFMC', 'RZMC', 'TSOIL1', 'SNOMAS']
@@ -131,6 +135,9 @@ def reformat_SMOS_IC():
     dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/SMOS_IC')
     fout = dir_out / 'SMOS_IC_images.nc'
 
+    if not dir_out.exists():
+        Path.mkdir(dir_out, parents=True)
+
     variables = ['Optical_Thickness_Nad', 'Optical_Thickness_Nad_StdError', 'Soil_Moisture','Soil_Moisture_StdError', 'RMSE', 'Scene_Flags']
     var_names = ['VOD', 'VOD_StdErr', 'SM', 'SM_StdErr', 'RMSE', 'Flags']
 
@@ -157,10 +164,81 @@ def reformat_SMOS_IC():
                 for var, name in zip(variables, var_names):
                     ds.variables[name][i, :, :] = smos[var][i_lat, i_lon]
 
+def reformat_COPERNICUS_LAI():
+
+    # root = Path('/Users/u0116961/data_sets/COPERNICUS_LAI')
+    root = Path('/staging/leuven/stg_00024/l_data/obs_satellite/COPERNICUS_LAI')
+
+    # dir_out = Path('/Users/u0116961/data_sets/COPERNICUS_LAI')
+    dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/COPERNICUS_LAI')
+    fout = dir_out / 'COPERNICUS_LAI_images.nc'
+
+    if not dir_out.exists():
+        Path.mkdir(dir_out, parents=True)
+
+    variables = ['LAI']
+
+    files1 = np.array(sorted(root.glob(f'**/c_gls_LAI_*VGT*.nc')))
+    files2 = np.array(sorted(root.glob(f'**/c_gls_LAI-RT6_*PROBAV*.nc')))
+
+    dates1 = [f.name.split('_')[3][:8] for f in files1]
+    dates2 = [f.name.split('_')[3][:8] for f in files2]
+
+    files = np.hstack((files1,files2))
+    dates = pd.DatetimeIndex(np.hstack((dates1,dates2)))
+
+    # COPERNICUS 1km grid
+    lats = Dataset(files[0])['lat'][:].data
+    lons = Dataset(files[0])['lon'][:].data
+    latmin, lonmin, latmax, lonmax = get_roi()
+    i_lat_1km = np.where((lats>=latmin)&(lats<=latmax))[0]
+    i_lon_1km = np.where((lons>=lonmin)&(lons<=lonmax))[0]
+    lats_1km = lats[i_lat_1km]
+    lons_1km = lons[i_lon_1km]
+
+    # EASE25 grid
+    grid = EASE2(gtype='M25')
+    lats, lons = grid.ease_lats, grid.ease_lons
+    i_lat_25km = np.where((lats >= latmin) & (lats <= latmax))[0]
+    i_lon_25km = np.where((lons >= lonmin) & (lons <= lonmax))[0]
+    lats_25km = lats[i_lat_25km]
+    lons_25km = lons[i_lon_25km]
+
+    i_lat, i_lon = [], []
+    for lat in lats_1km:
+        i_lat += [np.argmin(np.abs(lats_25km-lat))]
+    i_lat = np.array(i_lat)
+    for lon in lons_1km:
+        i_lon += [np.argmin(np.abs(lons_25km-lon))]
+    i_lon = np.array(i_lon)
+    # i_lons, i_lats = np.meshgrid(i_lon, i_lat)
+
+    dimensions = OrderedDict([('time', dates), ('lat', lats_25km), ('lon', lons_25km)])
+    with ncfile_init(fout, dimensions, variables) as ds:
+
+        for i, file in enumerate(files):
+
+            print(f'{i} / {len(dates)}')
+
+            with Dataset(file) as lai:
+                for var in variables:
+
+                    for i_lon_25 in range(len(lons_25km)):
+                        for i_lat_25 in range(len(lats_25km)):
+                            i_lons_cell = np.where(i_lon==i_lon_25)
+                            i_lats_cell = np.where(i_lat==i_lat_25)
+                            tmp_qflag = lai['QFLAG'][0, i_lat_1km[i_lats_cell], i_lon_1km[i_lons_cell]]
+                            tmp_lai = lai[var][0, i_lat_1km[i_lats_cell], i_lon_1km[i_lons_cell]]
+                            tmp_lai[tmp_qflag > 0] = 255.
+                            tmp_lai = np.ma.masked_where(tmp_qflag > 0, tmp_lai)
+                            tmp_lai.set_fill_value(255.)
+                            ds.variables[var][i, i_lat_25, i_lon_25] = np.ma.mean(tmp_lai)
+
 
 if __name__=='__main__':
 
     # reformat_MERRA2()
     # reformat_SMOS_IC()
+    # reformat_COPERNICUS_LAI()
     pass
 

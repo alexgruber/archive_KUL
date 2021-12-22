@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -l nodes=r23i13n23:ppn=3
+#PBS -W group_list=lees_swm_ls_ext
+#PBS -l pmem=5gb
+#PBS -A lp_ees_swm_ls_001
+#PBS -l walltime=72:00:00
+#PBS -m abe
+#PBS -M alexander.gruber@kuleuven.be
+#PBS -o ./log.txt
+#PBS -e ./out.txt
+
+cd $PBS_O_WORKDIR
+python reformat_COPERNICUS_LAI.py
+
+cd $PBS_O_WORKDIR
+ncks -4 -L 4 --cnk_dmn time,30000 --cnk_dmn lat,1 --cnk_dmn lon,1 COPERNICUS_LAI_images.nc COPERNICUS_LAI_timeseries.nc
+
+cd $PBS_O_WORKDIR
+rm -f out.txt log.txt
