@@ -11,9 +11,9 @@
 
 cd $PBS_O_WORKDIR
 
-python reformat_MERRA2.py
+python reformat_SMOS_IC.py
 
-ncks -4 -L 4 --cnk_dmn time,30000 --cnk_dmn lat,1 --cnk_dmn lon,1 MERRA2_images.nc MERRA2_timeseries.nc
+ncks -4 -L 4 --cnk_dmn time,30000 --cnk_dmn lat,1 --cnk_dmn lon,1 SMOS_IC_images.nc SMOS_IC_timeseries.nc
 
 cd $PBS_O_WORKDIR
 rm -f out.txt log.txt

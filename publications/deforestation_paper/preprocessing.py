@@ -108,30 +108,59 @@ def reformat_MERRA2():
 
     dimensions = OrderedDict([('time', dates), ('lat', lats), ('lon', lons)])
     variables = vars_slv + vars_lnd
+    with ncfile_init(fout, dimensions, variables) as ds:
 
-    ds = ncfile_init(fout, dimensions, variables)
+        for i, (f_slv, f_lnd) in enumerate(zip(*files)):
 
-    for i, (f_slv, f_lnd) in enumerate(zip(*files)):
+            print(f'{i} / {len(dates)}')
 
-        print(f'{i} / {len(dates)}')
+            with Dataset(f_slv) as slv, Dataset(f_lnd) as lnd:
 
-        with Dataset(f_slv) as slv, Dataset(f_lnd) as lnd:
+                for var in vars_slv:
+                    ds.variables[var][i, :, :] = np.mean(slv[var][:,i_lat, i_lon], axis=0)
+                for var in vars_lnd:
+                    ds.variables[var][i, :, :] = np.mean(lnd[var][:,i_lat, i_lon], axis=0)
 
-            for var in vars_slv:
-                ds.variables[var][i, :, :] = np.mean(slv[var][:,i_lat, i_lon], axis=0)
-            for var in vars_lnd:
-                ds.variables[var][i, :, :] = np.mean(lnd[var][:,i_lat, i_lon], axis=0)
 
-    ds.close()
+def reformat_SMOS_IC():
+
+    # root = Path('/Users/u0116961/data_sets/SMOS_IC')
+    root = Path('/staging/leuven/stg_00024/l_data/obs_satellite/SMOS_IC/v2/ASC')
+
+    # dir_out = Path('/Users/u0116961/data_sets/SMOS_IC')
+    dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/SMOS_IC')
+    fout = dir_out / 'SMOS_IC_images.nc'
+
+    variables = ['Optical_Thickness_Nad', 'Optical_Thickness_Nad_StdError', 'Soil_Moisture','Soil_Moisture_StdError', 'RMSE', 'Scene_Flags']
+    var_names = ['VOD', 'VOD_StdErr', 'SM', 'SM_StdErr', 'RMSE', 'Flags']
+
+    files = np.array(sorted(root.glob(f'**/SM_RE06_*.nc')))
+    dates = pd.DatetimeIndex([f.name.split('_')[4][:8] for f in files])
+
+    lats = Dataset(files[0])['lat'][:].data
+    lons = Dataset(files[0])['lon'][:].data
+    latmin, lonmin, latmax, lonmax = get_roi()
+    i_lat = np.where((lats>=latmin)&(lats<=latmax))[0]
+    i_lon = np.where((lons>=lonmin)&(lons<=lonmax))[0]
+    lats = lats[i_lat]
+    lons = lons[i_lon]
+
+    dimensions = OrderedDict([('time', dates), ('lat', lats), ('lon', lons)])
+    with ncfile_init(fout, dimensions, var_names) as ds:
+
+        for i, file in enumerate(files):
+
+            print(f'{i} / {len(dates)}')
+
+            with Dataset(file) as smos:
+
+                for var, name in zip(variables, var_names):
+                    ds.variables[name][i, :, :] = smos[var][i_lat, i_lon]
+
 
 if __name__=='__main__':
 
-    reformat_MERRA2()
+    # reformat_MERRA2()
+    # reformat_SMOS_IC()
+    pass
 
-'''
-import sys
-sys.path.append('/data/leuven/320/vsc32046/python/')
-from myprojects.publications.deforestation_paper.preprocessing import reformat_MERRA2
-reformat_MERRA2()
-
-'''
