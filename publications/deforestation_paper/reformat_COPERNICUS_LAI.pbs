@@ -3,7 +3,7 @@
 #PBS -W group_list=lees_swm_ls_ext
 #PBS -l pmem=5gb
 #PBS -A lp_ees_swm_ls_001
-#PBS -l walltime=72:00:00
+#PBS -l walltime=24:00:00
 #PBS -m abe
 #PBS -M alexander.gruber@kuleuven.be
 #PBS -o ./log.txt
