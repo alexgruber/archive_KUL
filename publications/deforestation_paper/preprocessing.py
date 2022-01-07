@@ -1,12 +1,15 @@
 
 import numpy as np
 import pandas as pd
+import rasterio as rio
 
 from pathlib import Path
 from netCDF4 import Dataset, date2num
 from collections import OrderedDict
 
 from pyldas.grids import EASE2
+
+from myprojects.publications.deforestation_paper.interface import io
 
 def get_roi():
     latmin= -56.
@@ -123,7 +126,10 @@ def reformat_MERRA2():
                 for var in vars_slv:
                     ds.variables[var][i, :, :] = np.mean(slv[var][:,i_lat, i_lon], axis=0)
                 for var in vars_lnd:
-                    ds.variables[var][i, :, :] = np.mean(lnd[var][:,i_lat, i_lon], axis=0)
+                    if var == 'PRECTOTLAND':
+                        ds.variables[var][i, :, :] = np.sum(lnd[var][:,i_lat, i_lon], axis=0)
+                    else:
+                        ds.variables[var][i, :, :] = np.mean(lnd[var][:,i_lat, i_lon], axis=0)
 
 
 def reformat_SMOS_IC():
@@ -211,7 +217,6 @@ def reformat_COPERNICUS_LAI():
     for lon in lons_1km:
         i_lon += [np.argmin(np.abs(lons_25km-lon))]
     i_lon = np.array(i_lon)
-    # i_lons, i_lats = np.meshgrid(i_lon, i_lat)
 
     dimensions = OrderedDict([('time', dates), ('lat', lats_25km), ('lon', lons_25km)])
     with ncfile_init(fout, dimensions, variables) as ds:
@@ -235,10 +240,206 @@ def reformat_COPERNICUS_LAI():
                             ds.variables[var][i, i_lat_25, i_lon_25] = np.ma.mean(tmp_lai)
 
 
+def reformat_AGB():
+
+    root = Path('/Users/u0116961/data_sets/AGB')
+    fout = root / 'resampled' / 'AGB_25km.nc'
+
+    maskfile = root.parent / 'EASE2_M25km.LOCImask_land50_coast0km.1388x584.bin'
+    mask = np.fromfile(maskfile, dtype='byte').reshape(584,1388)
+
+    # tile name indicators
+    rows = ['N40','N00','S40']
+    cols = ['W100','W060']
+
+    # 45 000 pixels in each 40 x 40 deg box
+    n_xy = 45000
+    spc = 40 / n_xy
+
+    # AGB grid
+    agb = np.full((len(rows)*n_xy,len(cols)*n_xy), 2**16-1, dtype='uint16')
+    err = agb.copy()
+    lats_100m = (np.arange(agb.shape[0]) * spc - 80 + spc/2)[::-1]
+    lons_100m = (np.arange(agb.shape[1]) * spc - 100 + spc/2)
+    latmin, lonmin, latmax, lonmax = get_roi()
+    i_lat_100m = np.where((lats_100m>=latmin)&(lats_100m<=latmax))[0]
+    i_lon_100m = np.where((lons_100m>=lonmin)&(lons_100m<=lonmax))[0]
+    lats_100m = lats_100m[i_lat_100m]
+    lons_100m = lons_100m[i_lon_100m]
+
+
+    # EASE25 grid
+    grid = EASE2(gtype='M25')
+    lats, lons = grid.ease_lats, grid.ease_lons
+    i_lat_25km = np.where((lats >= latmin) & (lats <= latmax))[0]
+    i_lon_25km = np.where((lons >= lonmin) & (lons <= lonmax))[0]
+    lats_25km = lats[i_lat_25km]
+    lons_25km = lons[i_lon_25km]
+    agb_25km = np.full((len(lats_25km), len(lons_25km)), np.nan)
+    err_25km = agb_25km.copy()
+    dimensions = OrderedDict([('lat', lats_25km), ('lon', lons_25km)])
+    variables = ['AGB', 'AGB_err']
+
+    # Matchup
+    i_lat, i_lon = [], []
+    for lat in lats_100m:
+        i_lat += [np.argmin(np.abs(lats_25km-lat))]
+    i_lat = np.array(i_lat)
+    for lon in lons_100m:
+        i_lon += [np.argmin(np.abs(lons_25km-lon))]
+    i_lon = np.array(i_lon)
+
+    # Read and concatenate .tif images
+    for i_row, row in enumerate(rows):
+        for i_col, col in enumerate(cols):
+            fname_agb = root / 'raw'/ f'{row}{col}_agb/{row}{col}_agb.tif'
+            fname_err = root / 'raw'/ f'{row}{col}_agb/{row}{col}_agb_err.tif'
+            with rio.open(fname_agb) as ds_agb, rio.open(fname_err) as ds_err:
+                agb[n_xy*i_row : n_xy*i_row+n_xy, n_xy*i_col : n_xy*i_col+n_xy] = ds_agb.read(1)
+                err[n_xy*i_row : n_xy*i_row+n_xy, n_xy*i_col : n_xy*i_col+n_xy] = ds_err.read(1)
+
+    # clip domain to South America
+    agb = agb[i_lat_100m[0]:i_lat_100m[-1]+1, i_lon_100m[0]:i_lon_100m[-1]+1]
+    err = err[i_lat_100m[0]:i_lat_100m[-1]+1, i_lon_100m[0]:i_lon_100m[-1]+1]
+
+    # resample to 25km and store to .nc
+    with ncfile_init(fout, dimensions, variables) as ds:
+        for i_lon_25 in range(len(lons_25km)):
+            for i_lat_25 in range(len(lats_25km)):
+
+                i_lons_cell = np.where(i_lon == i_lon_25)[0]
+                i_lats_cell = np.where(i_lat == i_lat_25)[0]
+
+                if mask[i_lat_25km[i_lat_25], i_lon_25km[i_lon_25]] == 0:
+                    ds.variables['AGB'][i_lat_25, i_lon_25] = np.nanmean(
+                        agb[i_lats_cell[0]:i_lats_cell[-1] + 1, i_lons_cell[0]:i_lons_cell[-1] + 1])
+                    ds.variables['AGB_err'][i_lat_25, i_lon_25] = np.nanmean(
+                        err[i_lats_cell[0]:i_lats_cell[-1] + 1, i_lons_cell[0]:i_lons_cell[-1] + 1])
+
+def reformat_TCL():
+
+    root = Path('/Users/u0116961/data_sets/tree_cover_loss')
+    fout = root / 'resampled' / 'TCL_25km.nc'
+
+    maskfile = root.parent / 'EASE2_M25km.LOCImask_land50_coast0km.1388x584.bin'
+    mask = np.fromfile(maskfile, dtype='byte').reshape(584,1388)
+
+    # tile name indicators
+    rows = ['20N', '10N', '00N', '10S', '20S', '30S', '40S', '50S']
+    cols = ['090W', '080W', '070W', '060W', '050W', '040W']
+
+    # 40 000 pixels in each 10 x 10 deg box
+    n_xy = 40000
+    spc = 10 / n_xy
+
+    # TCL grid
+    tcl = np.full((len(rows)*n_xy,len(cols)*n_xy), 2**8-1, dtype='uint8')
+    lats_30m = (np.arange(tcl.shape[0]) * spc - 60 + spc/2)[::-1]
+    lons_30m = (np.arange(tcl.shape[1]) * spc - 90 + spc/2)
+    latmin, lonmin, latmax, lonmax = get_roi()
+    i_lat_30m = np.where((lats_30m>=latmin)&(lats_30m<=latmax))[0]
+    i_lon_30m = np.where((lons_30m>=lonmin)&(lons_30m<=lonmax))[0]
+    lats_30m = lats_30m[i_lat_30m]
+    lons_30m = lons_30m[i_lon_30m]
+
+
+    # EASE25 grid
+    grid = EASE2(gtype='M25')
+    lats, lons = grid.ease_lats, grid.ease_lons
+    i_lat_25km = np.where((lats >= latmin) & (lats <= latmax))[0]
+    i_lon_25km = np.where((lons >= lonmin) & (lons <= lonmax))[0]
+    lats_25km = lats[i_lat_25km]
+    lons_25km = lons[i_lon_25km]
+    tcl_25km = np.full((len(lats_25km), len(lons_25km)), np.nan)
+    dimensions = OrderedDict([('lat', lats_25km), ('lon', lons_25km)])
+    variables = ['TCL',]
+
+    # Matchup
+    i_lat, i_lon = [], []
+    for lat in lats_30m:
+        i_lat += [np.argmin(np.abs(lats_25km-lat))]
+    i_lat = np.array(i_lat)
+    for lon in lons_30m:
+        i_lon += [np.argmin(np.abs(lons_25km-lon))]
+    i_lon = np.array(i_lon)
+
+    # Read and concatenate .tif images
+    for i_row, row in enumerate(rows):
+        for i_col, col in enumerate(cols):
+            fname_tcl = root / 'raw'/ f'Hansen_GFC-2020-v1.8_lossyear_{row}_{col}.tif'
+            with rio.open(fname_tcl) as ds_tcl:
+                tcl[n_xy*i_row : n_xy*i_row+n_xy, n_xy*i_col : n_xy*i_col+n_xy] = ds_tcl.read(1)
+
+    # clip domain to South America
+    tcl = tcl[i_lat_30m[0]:i_lat_30m[-1]+1, i_lon_30m[0]:i_lon_30m[-1]+1]
+
+    # resample to 25km and store to .nc
+    with ncfile_init(fout, dimensions, variables) as ds:
+        for i_lon_25 in range(len(lons_25km)):
+            for i_lat_25 in range(len(lats_25km)):
+
+                i_lons_cell = np.where(i_lon == i_lon_25)[0]
+                i_lats_cell = np.where(i_lat == i_lat_25)[0]
+
+                if mask[i_lat_25km[i_lat_25], i_lon_25km[i_lon_25]] == 0:
+                    tmp = tcl[i_lats_cell[0]:i_lats_cell[-1] + 1, i_lons_cell[0]:i_lons_cell[-1] + 1]
+                    ds.variables['TCL'][i_lat_25, i_lon_25] = len(np.where(tmp != 0)[0]) / tmp.size
+
+def generate_MERRA2_EASE_LUT():
+
+    fout = '/Users/u0116961/data_sets/LUT_EASE25_MERRA2_South_America.csv'
+
+    # MERRA2 coordinates
+    with Dataset('/Users/u0116961/data_sets/MERRA2/south_america_2010_2020/MERRA2_images.nc') as ds:
+        lats_merra = ds['lat'][:].data
+        lons_merra = ds['lon'][:].data
+
+    # EASE2 coordinates
+    grid = EASE2(gtype='M25')
+    lats, lons = grid.ease_lats, grid.ease_lons
+    latmin, lonmin, latmax, lonmax = get_roi()
+    i_lat_25km = np.where((lats >= latmin) & (lats <= latmax))[0]
+    i_lon_25km = np.where((lons >= lonmin) & (lons <= lonmax))[0]
+    i_lons, i_lats = np.meshgrid(i_lon_25km, i_lat_25km)
+    i_lons = i_lons.flatten()
+    i_lats = i_lats.flatten()
+
+    # Extract land points
+    maskfile = '/Users/u0116961/data_sets/EASE2_M25km.LOCImask_land50_coast0km.1388x584.bin'
+    mask = np.fromfile(maskfile, dtype='byte').reshape(584,1388)
+    mask = mask[i_lats, i_lons]
+    ind_valid = np.where(mask == 0)[0]
+
+    # Land coordinates on the EASE grid
+    lats = lats[i_lats[ind_valid]]
+    lons = lons[i_lons[ind_valid]]
+
+    # EASE columns/rows for south american land points only
+    i_lons, i_lats = np.meshgrid(np.arange(len(i_lon_25km)), np.arange(len(i_lat_25km)))
+    i_lons = i_lons.flatten()
+    i_lats = i_lats.flatten()
+
+    res = pd.DataFrame({'lat': lats,
+                        'lon': lons,
+                        'row_ease': i_lats[ind_valid],
+                        'col_ease': i_lons[ind_valid],
+                        'row_merra': -9999,
+                        'col_merra': -9999})
+
+    for i, val in res.iterrows():
+        res.loc[i,'row_merra'] = np.argmin(abs(lats_merra-val.lat))
+        res.loc[i,'col_merra'] = np.argmin(abs(lons_merra-val.lon))
+
+    res.to_csv(fout, float_format='%0.4f')
+
+
 if __name__=='__main__':
 
     # reformat_MERRA2()
     # reformat_SMOS_IC()
     # reformat_COPERNICUS_LAI()
+    # reformat_AGB()
+    # reformat_TCL()
+    # generate_MERRA2_EASE_LUT()
     pass
 
