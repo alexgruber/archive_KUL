@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
+from glob import glob
 from pathlib import Path
 from netCDF4 import Dataset, date2num
 from collections import OrderedDict
@@ -88,8 +89,8 @@ def ncfile_init(fname, dimensions, variables):
 
 def reformat_MERRA2():
 
-    # root = Path('/Users/u0116961/data_sets/MERRA2')             )
-    root = Path('/staging/leuven/stg_00024/input/met_forcing/MERRA2_land_forcing/MERRA2_400/diag')
+    # root = Path('/Users/u0116961/data_sets/MERRA2')
+    root = '/staging/leuven/stg_00024/input/met_forcing/MERRA2_land_forcing/MERRA2_400/diag'
 
     # dir_out = Path('/Users/u0116961/data_sets/MERRA2')
     dir_out = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/MERRA2')
@@ -102,7 +103,9 @@ def reformat_MERRA2():
     vars_slv = ['T2M']
     vars_lnd = ['PRECTOTLAND','LWLAND', 'SWLAND', 'SFMC', 'RZMC', 'TSOIL1', 'SNOMAS']
 
-    files = [np.array(sorted(root.glob(f'**/*{name}*'))) for name in names]
+    files = [[Path(f) for f in np.sort(glob(f"{root}/Y*/**/*{name}*", recursive=True))] for name in names]
+    # files = [np.array(sorted(root.glob(f'**/*{name}*'))) for name in names]
+
     dates = pd.DatetimeIndex([f.name.split('.')[-2] for f in files[0]])
 
     lats = Dataset(files[0][0])['lat'][:].data
@@ -385,14 +388,19 @@ def reformat_TCL():
                     tmp = tcl[i_lats_cell[0]:i_lats_cell[-1] + 1, i_lons_cell[0]:i_lons_cell[-1] + 1]
                     ds.variables['TCL'][i_lat_25, i_lon_25] = len(np.where(tmp != 0)[0]) / tmp.size
 
-def generate_MERRA2_EASE_LUT():
+def generate_LUT():
 
-    fout = '/Users/u0116961/data_sets/LUT_EASE25_MERRA2_South_America.csv'
+    fout = '/Users/u0116961/data_sets/LUT_EASE25_MERRA2_SIF_South_America.csv'
 
     # MERRA2 coordinates
     with Dataset('/Users/u0116961/data_sets/MERRA2/south_america_2010_2020/MERRA2_images.nc') as ds:
         lats_merra = ds['lat'][:].data
         lons_merra = ds['lon'][:].data
+
+    # SIF coordinates
+    with Dataset('/Users/u0116961/data_sets/SIF/SIF_SouthAm_20180201_20210930_8day_0.25deg.nc') as ds:
+        lats_sif = ds['lat'][:].data
+        lons_sif = ds['lon'][:].data
 
     # EASE2 coordinates
     grid = EASE2(gtype='M25')
@@ -424,11 +432,16 @@ def generate_MERRA2_EASE_LUT():
                         'row_ease': i_lats[ind_valid],
                         'col_ease': i_lons[ind_valid],
                         'row_merra': -9999,
-                        'col_merra': -9999})
+                        'col_merra': -9999,
+                        'row_sif': -9999,
+                        'col_sif': -9999
+                        })
 
     for i, val in res.iterrows():
         res.loc[i,'row_merra'] = np.argmin(abs(lats_merra-val.lat))
         res.loc[i,'col_merra'] = np.argmin(abs(lons_merra-val.lon))
+        res.loc[i,'row_sif'] = np.argmin(abs(lats_sif-val.lat))
+        res.loc[i,'col_sif'] = np.argmin(abs(lons_sif-val.lon))
 
     res.to_csv(fout, float_format='%0.4f')
 
@@ -440,6 +453,6 @@ if __name__=='__main__':
     # reformat_COPERNICUS_LAI()
     # reformat_AGB()
     # reformat_TCL()
-    # generate_MERRA2_EASE_LUT()
+    generate_LUT()
     pass
 

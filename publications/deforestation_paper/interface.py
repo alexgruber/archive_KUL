@@ -34,7 +34,7 @@ class io(object):
 
         root = Path('/Users/u0116961/data_sets/')
 
-        self.lut = pd.read_csv(root / 'LUT_EASE25_MERRA2_South_America.csv', index_col=0)
+        self.lut = pd.read_csv(root / 'LUT_EASE25_MERRA2_SIF_South_America.csv', index_col=0)
 
         self.name = name
         if name == 'AGB':
@@ -44,6 +44,9 @@ class io(object):
         elif name == 'LAI':
             self.ds = Dataset(root / 'COPERNICUS_LAI' / 'COPERNICUS_LAI_timeseries.nc')
             self.ds_img = Dataset(root / 'COPERNICUS_LAI' / 'COPERNICUS_LAI_images.nc')
+        elif name == 'SIF':
+            self.ds = Dataset(root / 'SIF' / 'SIF_SouthAm_20180201_20210930_8day_0.25deg.nc')
+            self.ds_img = self.ds
         elif name == 'SMOS_IC':
             self.ds = Dataset(root / 'SMOS_IC' / 'south_america_2010_2020' / 'SMOS_IC_timeseries.nc')
             self.ds_img = Dataset(root / 'SMOS_IC' / 'south_america_2010_2020' / 'SMOS_IC_images.nc')
@@ -51,7 +54,7 @@ class io(object):
             self.ds = Dataset(root / 'MERRA2' / 'south_america_2010_2020' / 'MERRA2_timeseries.nc')
             self.ds_img = Dataset(root / 'MERRA2' / 'south_america_2010_2020' / 'MERRA2_images.nc')
         else:
-            valid = ['AGB', 'TCL', 'LAI', 'SMOS_IC', 'MERRA2']
+            valid = ['AGB', 'TCL', 'LAI', 'SIF', 'SMOS_IC', 'MERRA2']
             print(f'Unknown data set. Allowed: {", ".join(valid)}')
 
         self.lon, self.lat = np.meshgrid(self.ds['lon'][:].data, self.ds['lat'][:].data)
@@ -78,14 +81,26 @@ class io(object):
             data = self.ds[var][:, :].data
         else:
             if n:
-                data = self.ds_img[var][n, :, :].data
+                if self.name == 'SIF':
+                    data = self.ds_img[var][:, :, n].data
+                else:
+                    data = self.ds_img[var][n, :, :].data
             elif date_from and date_to:
                 ind = np.where((self.dates>=date_from)&(self.dates<=date_to))[0]
-                data = self.ds_img[var][ind, :, :].data
+                if self.name == 'SIF':
+                    data = np.moveaxis(self.ds_img[var][:, :, ind].data, 2, 0)
+                else:
+                    data = self.ds_img[var][ind, :, :].data
             else:
-                data = self.ds_img[var][:, :, :].data
+                if self.name == 'SIF':
+                    data = np.moveaxis(self.ds_img[var][:, :, :].data, 2, 0)
+                else:
+                    data = self.ds_img[var][:, :, :].data
 
-        data[data == -9999] = np.nan
+        if self.name == 'SIF':
+            data[data == -999] = np.nan
+        else:
+            data[data == -9999] = np.nan
 
         if var == 'T2M':
             data -= 273.15
@@ -96,12 +111,15 @@ class io(object):
             return data
 
 
-    def read(self, var, *args, latlon=False):
+    def read(self, var, *args, latlon=False, date_from=None, date_to=None):
 
         if len(args) == 1:
             if self.name == 'MERRA2':
                 row = self.lut.loc[args[0], 'row_merra']
                 col = self.lut.loc[args[0], 'col_merra']
+            if self.name == 'SIF':
+                row = self.lut.loc[args[0], 'row_sif']
+                col = self.lut.loc[args[0], 'col_sif']
             else:
                 row = self.lut.loc[args[0], 'row_ease']
                 col = self.lut.loc[args[0], 'col_ease']
@@ -114,6 +132,9 @@ class io(object):
                 if self.name == 'MERRA2':
                     row = self.lut.loc[idx, 'row_merra']
                     col = self.lut.loc[idx, 'col_merra']
+                if self.name == 'SIF':
+                    row = self.lut.loc[idx, 'row_sif']
+                    col = self.lut.loc[idx, 'col_sif']
                 else:
                     row = self.lut.loc[idx, 'row_ease']
                     col = self.lut.loc[idx, 'col_ease']
@@ -121,12 +142,18 @@ class io(object):
         if len(self.ds[var].shape) == 2:
             data = self.ds[var][row, col].data
         else:
-            data = self.ds[var][:, row, col].data
-            data[data == -9999] = np.nan
+            if self.name == 'SIF':
+                data = self.ds[var][row, col, :].data
+                data[data == -999] = np.nan
+            else:
+                data = self.ds[var][:, row, col].data
+                data[data == -9999] = np.nan
             data = pd.Series(data, self.dates)
             if var == 'T2M':
                 data -= 273.15
 
+            if date_from and date_to:
+                data = data.loc[date_from:date_to]
 
         return data
 
