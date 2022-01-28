@@ -27,7 +27,7 @@ def calc_anom(Ser, mode='climatological', window_size=35, return_clim=False, ret
 
     # Calculate the climatology
     if (mode != 'shortterm') | return_clim | return_clim366:
-        clim = calc_climatology(Ser, respect_leap_years=True, wraparound=True, moving_avg_clim=window_size)
+        clim = calc_climatology(Ser, respect_leap_years=True, wraparound=True, moving_avg_clim=window_size, fillna=False)
     else:
         clim = None
 
@@ -50,7 +50,7 @@ def calc_anom(Ser, mode='climatological', window_size=35, return_clim=False, ret
 
     return res
 
-def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False, window_size=35):
+def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False, window_size=35, n=3):
 
     if (output=='climatology')&(longterm is True):
         output = 'climSer'
@@ -69,7 +69,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False,
 
     if longterm is True:
         if method=='harmonic':
-            clim = calc_clim_harmonic(xSer)
+            clim = calc_clim_harmonic(xSer, n=n)
         if method=='mean':
             clim = calc_clim_harmonic(xSer, n=0)
         if (method=='moving_average')|(method=='ma'):
@@ -82,7 +82,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False,
         years = xSer.index.year
         for yr in np.unique(years):
             if method == 'harmonic':
-                clim = calc_clim_harmonic(xSer[years == yr])
+                clim = calc_clim_harmonic(xSer[years == yr], n=n)
             if method == 'mean':
                 clim = calc_clim_harmonic(xSer[years == yr], n=0)
             if (method == 'moving_average') | (method == 'ma'):
@@ -96,7 +96,7 @@ def calc_anomaly(Ser, method='moving_average', output='anomaly', longterm=False,
     return xSer - climSer
 
 
-def calc_clim_harmonic(Ser, n=3, cutoff=True):
+def calc_clim_harmonic(Ser, n=3, cutoff=False):
     """
     Calculates the mean seasonal cycle of a data set
     by fitting harmonics.

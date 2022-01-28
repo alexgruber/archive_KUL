@@ -117,7 +117,7 @@ class io(object):
             if self.name == 'MERRA2':
                 row = self.lut.loc[args[0], 'row_merra']
                 col = self.lut.loc[args[0], 'col_merra']
-            if self.name == 'SIF':
+            elif self.name == 'SIF':
                 row = self.lut.loc[args[0], 'row_sif']
                 col = self.lut.loc[args[0], 'col_sif']
             else:
@@ -132,7 +132,7 @@ class io(object):
                 if self.name == 'MERRA2':
                     row = self.lut.loc[idx, 'row_merra']
                     col = self.lut.loc[idx, 'col_merra']
-                if self.name == 'SIF':
+                elif self.name == 'SIF':
                     row = self.lut.loc[idx, 'row_sif']
                     col = self.lut.loc[idx, 'col_sif']
                 else:
