@@ -7,7 +7,6 @@ import pandas as pd
 
 from pathlib import Path
 
-
 from ismn.interface import ISMN_Interface
 from pyldas.interface import GEOSldas_io
 
@@ -19,7 +18,7 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-            self.root = Path('~/data_sets/ISMN/CONUS_20150401_20200401_downloaded_20210920').expanduser()
+            self.root = Path('~/data_sets/ISMN/CONUS_20070101_20200101').expanduser()
         else:
             self.root = Path(path)
 

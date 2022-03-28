@@ -113,15 +113,22 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
 
 def AGB_VOD_LAI():
 
-    print_agb_vod_lai = False
+    print_agb_vod_lai = True
     print_agb_change = False
-    print_agb_tcl = True
+    print_agb_tcl = False
 
     ds_agb = io('AGB')
     ds_vod = io('SMOS_IC')
+    ds_met = io('MERRA2')
     ds_lai = io('LAI')
-    # ds_sif = io('SIF')
     ds_tcl = io('TCL')
+
+    cl = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/PCA_classes.csv', index_col=0)
+    cl_arr = np.full(ds_agb.lat.shape, np.nan)
+    cl_arr[ds_agb.lut.row_ease,ds_agb.lut.col_ease] = cl.values.reshape(ds_met.lat.shape)[ds_agb.lut.row_merra,ds_agb.lut.col_merra]
+    # cl = pd.Series(cl.values.reshape(ds_met.lat.shape)[ds_agb.lut.row_merra,ds_agb.lut.col_merra],
+    #                index=ds_agb.lut.index)
+
 
     trends = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/trends.csv', index_col=0)
     lut = ds_agb.lut.reindex(trends.index)
@@ -129,7 +136,7 @@ def AGB_VOD_LAI():
     sig = np.full(ds_agb.lat.shape, 1.)
     sig[lut[trends[f'p_vod'] > 0.05].row_ease, lut[trends[f'p_vod'] > 0.05].col_ease] = np.nan
 
-    corr = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/lagged_corr.csv', index_col=0)
+    corr = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/lagged_corr_w_sif.csv', index_col=0)
     lut2 = ds_agb.lut.reindex(corr.index)
     t = np.full(ds_agb.lat.shape, np.nan)
     p = np.full(ds_agb.lat.shape, np.nan)
@@ -182,92 +189,83 @@ def AGB_VOD_LAI():
     vod2010[invalid] = np.nan
     vod2019[invalid] = np.nan
     tcl[invalid] = np.nan
-    # sif_ease[invalid] = np.nan
-    valid = np.where(~np.isnan(agb))
 
-    fontsize = 10
+    for cls in np.unique(cl_arr[~np.isnan(cl_arr)]):
 
-    if print_agb_vod_lai:
+        tmp_agb = agb.copy()
+        tmp_lai = lai.copy()
+        tmp_vod2010 = vod2010.copy()
 
-        f = plt.figure(figsize=(16,11))
+        tmp_agb[cl_arr != cls] = np.nan
+        tmp_lai[cl_arr != cls] = np.nan
+        tmp_vod2010[cl_arr != cls] = np.nan
 
-        gs = gridspec.GridSpec(3, 4, height_ratios=[2,1,0.025], wspace=0.2, hspace=0.20)
+        valid = np.where(~np.isnan(tmp_agb))
 
-        plt.subplot(gs[0,0])
-        plot_img(ds_agb.lon, ds_agb.lat, agb, cbrange=(0,100), cmap='viridis_r', title='AGB [Mg/ha]', fontsize=fontsize)
+        fontsize = 10
 
-        plt.subplot(gs[0,1])
-        plot_img(ds_agb.lon, ds_agb.lat, lai, cbrange=(0,5), cmap='viridis_r', title='LAI [-]', fontsize=fontsize)
+        if print_agb_vod_lai:
 
-        plt.subplot(gs[0,2])
-        plot_img(ds_agb.lon, ds_agb.lat, vod2010, cbrange=(0,0.8), cmap='viridis_r', title='VOD [-]', fontsize=fontsize)
+            f = plt.figure(figsize=(16,11))
 
-        # plt.subplot(gs[0,3])
-        # plot_img(ds_agb.lon, ds_agb.lat, sif_ease, cbrange=(0, 0.8), cmap='viridis_r', title='SIF [mW/m$^2$/sr/nm]', fontsize=fontsize)
+            gs = gridspec.GridSpec(3, 4, height_ratios=[2,1,0.025], wspace=0.2, hspace=0.20)
 
-        p_order = 3
+            plt.subplot(gs[0,0])
+            plot_img(ds_agb.lon, ds_agb.lat, tmp_agb, cbrange=(0,100), cmap='viridis_r', title='AGB [Mg/ha]', fontsize=fontsize)
 
-        ax = plt.subplot(gs[1,1])
-        x, y = lai[valid], agb[valid]
-        ax.hexbin(x, y,
-                  gridsize=35, bins='log',
-                  cmap='viridis', mincnt=1)
-        xs = np.linspace(x.min(),x.max(), 100)
-        p = np.poly1d(np.polyfit(x, y, p_order))
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        plt.plot(xs, p(xs), linestyle='-.', linewidth=1, color='k')
-        plt.xlim(xlim)
-        plt.ylim(ylim)
-        corr = np.corrcoef(x, y)[0,1]
-        plt.title(f'R = {corr:.3f}', fontsize=fontsize)
-        plt.xlabel('LAI [-]', fontsize=fontsize)
-        plt.ylabel('AGB [Mg/ha]', fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
-        plt.yticks(fontsize=fontsize)
+            plt.subplot(gs[0,1])
+            plot_img(ds_agb.lon, ds_agb.lat, tmp_lai, cbrange=(0,5), cmap='viridis_r', title='LAI [-]', fontsize=fontsize)
 
-        ax = plt.subplot(gs[1,2])
-        x, y = vod2010[valid], agb[valid]
-        ax.hexbin(x, y,
-                  gridsize=35, bins='log',
-                  cmap='viridis', mincnt=1)
-        xs = np.linspace(x.min(),x.max(), 100)
-        p = np.poly1d(np.polyfit(x, y, p_order))
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        plt.plot(xs, p(xs), linestyle='-.', linewidth=1, color='k')
-        plt.xlim(xlim)
-        plt.ylim(ylim)
-        corr = np.corrcoef(x, y)[0,1]
-        plt.title(f'R = {corr:.3f}', fontsize=fontsize)
-        plt.xlabel('VOD [-]', fontsize=fontsize)
-        # plt.ylabel('AGB [Mg/ha]', fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
-        plt.yticks([])
+            plt.subplot(gs[0,2])
+            plot_img(ds_agb.lon, ds_agb.lat, tmp_vod2010, cbrange=(0,0.8), cmap='viridis_r', title='VOD [-]', fontsize=fontsize)
 
-        # ax = plt.subplot(gs[1,3])
-        # x, y = sif_ease[valid], agb[valid]
-        # ax.hexbin(x, y,
-        #           gridsize=35, bins='log',
-        #           cmap='viridis', mincnt=1)
-        # xs = np.linspace(x.min(),x.max(), 100)
-        # p = np.poly1d(np.polyfit(x, y, p_order))
-        # xlim = ax.get_xlim()
-        # ylim = ax.get_ylim()
-        # plt.plot(xs, p(xs), linestyle='-.', linewidth=1, color='k')
-        # plt.xlim(xlim)
-        # plt.ylim(ylim)
-        # corr = np.corrcoef(x, y)[0,1]
-        # plt.title(f'R = {corr:.3f}', fontsize=fontsize)
-        # plt.xlabel('SIF [mW/m$^2$/sr/nm]', fontsize=fontsize)
-        # # plt.ylabel('AGB [Mg/ha]', fontsize=fontsize)
-        # plt.xticks(fontsize=fontsize)
-        # plt.yticks([])
+            p_order = 3
 
+            ax = plt.subplot(gs[1,1])
+            x, y = tmp_lai[valid], tmp_agb[valid]
+            ax.hexbin(x, y,
+                      gridsize=35, bins='log',
+                      cmap='viridis', mincnt=1)
+            xs = np.linspace(x.min(),x.max(), 100)
+            p = np.poly1d(np.polyfit(x, y, p_order))
+            # xlim = ax.get_xlim()
+            # ylim = ax.get_ylim()
+            xlim = [-0.2,6.2]
+            ylim = [-20,330]
+            plt.plot(xs, p(xs), linestyle='-.', linewidth=1, color='k')
+            plt.xlim(xlim)
+            plt.ylim(ylim)
+            corr = np.corrcoef(x, y)[0,1]
+            plt.title(f'R = {corr:.3f}', fontsize=fontsize)
+            plt.xlabel('LAI [-]', fontsize=fontsize)
+            plt.ylabel('AGB [Mg/ha]', fontsize=fontsize)
+            plt.xticks(fontsize=fontsize)
+            plt.yticks(fontsize=fontsize)
 
-        fname = '/Users/u0116961/Documents/work/deforestation_paper/plots/AGB_LAI_VOD_w_SIF.png'
-        f.savefig(fname, dpi=300, bbox_inches='tight')
-        plt.close()
+            ax = plt.subplot(gs[1,2])
+            x, y = tmp_vod2010[valid], tmp_agb[valid]
+            ax.hexbin(x, y,
+                      gridsize=35, bins='log',
+                      cmap='viridis', mincnt=1)
+            xs = np.linspace(x.min(),x.max(), 100)
+            p = np.poly1d(np.polyfit(x, y, p_order))
+            # xlim = ax.get_xlim()
+            # ylim = ax.get_ylim()
+            xlim = [-0.2,1.4]
+            ylim = [-20,330]
+            plt.plot(xs, p(xs), linestyle='-.', linewidth=1, color='k')
+            plt.xlim(xlim)
+            plt.ylim(ylim)
+            corr = np.corrcoef(x, y)[0,1]
+            plt.title(f'R = {corr:.3f}', fontsize=fontsize)
+            plt.xlabel('VOD [-]', fontsize=fontsize)
+            # plt.ylabel('AGB [Mg/ha]', fontsize=fontsize)
+            plt.xticks(fontsize=fontsize)
+            plt.yticks([])
+
+            fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/AGB_LAI_VOD_cl{int(cls)}.png'
+            f.savefig(fname, dpi=300, bbox_inches='tight')
+            plt.close()
 
 
     p = np.poly1d(np.polyfit(vod2010[valid], agb[valid], 3))
@@ -1082,12 +1080,12 @@ def plot_breakpoints():
     # im = plot_img(ds.lon, ds.lat, arr, cbrange=[-5, 5], cmap=cmap_d2, title='VOD - LAI', fontsize=fontsize,
     #               plot_cmap=True)
 
-    # fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/breakpoints.png'
-    # f.savefig(fname, dpi=300, bbox_inches='tight')
-    # plt.close()
+    fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/breakpoints_bfast.png'
+    f.savefig(fname, dpi=300, bbox_inches='tight')
+    plt.close()
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
 def plot_bp_rss_stats():
 
@@ -1111,7 +1109,7 @@ def plot_bp_rss_stats():
 
         plt.subplot(1, 2, n+1)
 
-        im = plot_img(ds.lon, ds.lat, arr, cbrange=(0, 25), cmap='viridis', title=variable, fontsize=fontsize,
+        im = plot_img(ds.lon, ds.lat, arr, cbrange=(0, 25), cmap='viridis_r', title=variable, fontsize=fontsize,
                       plot_cmap=True)
 
     fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/rss_range.png'
@@ -1332,7 +1330,7 @@ def calc_pca_classes():
 
 
 if __name__=='__main__':
-    # AGB_VOD_LAI()
+    AGB_VOD_LAI()
     # mean_veg_met()
     # calc_lagged_corr()
     # plot_lagged_corr_spatial()
@@ -1344,8 +1342,8 @@ if __name__=='__main__':
     # plot_mask()
     # plot_trend_tcl()
     # calc_trend_breakpoints()
-    # plot_breakpoints()
+    plot_breakpoints()
     # plot_bp_rss_stats()
     # plot_trend_ts()
-    calc_pca_classes()
+    # calc_pca_classes()
     pass
