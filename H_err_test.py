@@ -40,7 +40,7 @@ def P_K_diff_dependency():
 
     f, axs = plt.subplots(2, 2, figsize=(14,10), sharex=True, sharey=True)
 
-    plt.suptitle('$\Delta$P$^+$(10% deviation from K$_{opt}$)', y=0.95)
+    # plt.suptitle('$\Delta$P$^+$(10% deviation from K$_{opt}$)', y=0.95)
 
     for i, (ax, k) in enumerate(zip(axs.flatten(),[0, 0.5, 1, 2])):
 
@@ -61,16 +61,16 @@ def P_K_diff_dependency():
         CS = ax.contour(Rs / P_val, Ms / P_val, Pupd_grid2/Pupd_grid, colors='white', linestyles='--', linewidths=1, levels=[1.02, 1.04, 1.06, 1.08])
         ax.clabel(CS, inline=True, fontsize=10)
 
-        ax.set_title(f'x$^2$ = {k} $\cdot$ M')
+        ax.set_title('(x$^-$)$^2$ = ' + f'{k} $\cdot$ $\Sigma_o$')
 
     f.text(0.5, 0.05, 'R / HP$^-$H$^T$', ha='center')
-    f.text(0.06, 0.5, 'M / HP$^-$H$^T$', va='center', rotation='vertical')
+    f.text(0.06, 0.5, '$\Sigma_o$ / HP$^-$H$^T$', va='center', rotation='vertical')
 
     f.subplots_adjust(right=0.85)
     cbar_ax = f.add_axes([0.87, 0.25, 0.02, 0.5])
     f.colorbar(im, cax=cbar_ax)
 
-    fout = '/Users/u0116961/Documents/skill_gain_K_dependence.png'
+    fout = r'H:\work\SMAP_DA_paper\plots\skill_gain_K_dependence.png'
     f.savefig(fout, dpi=300, bbox_inches='tight')
     plt.close()
 

@@ -202,46 +202,50 @@ def plot_predicted_skillgain(dir_out):
 def plot_ascat_eval_absolute(res_path, dir_out):
 
     runs = ['Pcorr_OL', 'Pcorr_4K', ['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
-    titles = ['Open-loop', '4K Benchmark', 'Individual assimilation', 'Joint assimilation']
+    # titles = ['Open-loop', '4K Benchmark', 'Individual assimilation', 'Joint assimilation']
+    titles = ['$OL$', '$CTRL$', ['$DA_{anom}$','$DA_{LF}$','$DA_{HF}$'], '$DA_{joint}$']
 
     res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
-    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    res_tc = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv', index_col=0)
 
     modes = ['anom_lst', 'anom_lt', 'anom_st']
 
     cb_r = [0.6, 1]
 
-    fontsize = 14
+    fontsize = 17
 
-    f = plt.figure(figsize=(22,8))
+    f = plt.figure(figsize=(25,17))
 
-    for i, m in enumerate(modes):
+    for cnt, (run, tit) in enumerate(zip(runs,titles)):
 
-        for cnt, (run, tit) in enumerate(zip(runs,titles)):
+        for i, m in enumerate(modes):
 
             r = run if cnt != 2 else run[i]
 
-            ax = plt.subplot(3, 4, i * 4 + cnt + 1)
+            ind = cnt * 3 + i + 1
+            label = chr(96+ind) + ')'
+
+            ax = plt.subplot(4, 3, ind)
 
             col = f'ana_r_corr_{r}_{m}'
 
             res[col][res[col] < 0] = 0
             res[col][res[col] > 1] = 1
 
-            if i == 0:
-                title = tit
+            if isinstance(tit, list):
+                ylabel = tit[i]
             else:
-                title = ''
+                ylabel = tit
 
-            if cnt == 0:
-                if i == 0:
-                    ylabel = 'Anomaly skill'
-                elif i == 1:
-                    ylabel = 'LF skill'
-                else:
-                    ylabel = 'HF skill'
+            # if cnt == 0:
+            if i == 0:
+                title = r'$\rho_{anom}$' + f' ({ylabel})'
+            elif i == 1:
+                title = r'$\rho_{LF}$' + f' ({ylabel})'
             else:
-                ylabel = ''
+                title = r'$\rho_{HF}$' + f' ({ylabel})'
+            # else:
+            #     title = ''
 
             r_asc_smap = res_tc[f'r_grid_{m}_p_ASCAT_SMAP']
             r_asc_clsm = res_tc[f'r_grid_{m}_p_ASCAT_CLSM']
@@ -249,49 +253,59 @@ def plot_ascat_eval_absolute(res_path, dir_out):
             thres = 0.2
             ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
 
-            im = plot_ease_img(res.reindex(ind_valid), col , title=title, cmap='viridis', cbrange=cb_r, fontsize=fontsize, print_mean=True, plot_cb=False)
-            ax.set_ylabel(ylabel)
+            im = plot_ease_img(res.reindex(ind_valid), col , title=title, cmap='viridis', cbrange=cb_r, fontsize=fontsize,
+                               print_median=True,
+                               plot_cb=False,
+                               plot_label=label)
 
-        plot_centered_cbar(f, im, 4, fontsize=fontsize-2, pad=0.02)
+            # ax.set_ylabel(ylabel, fontsize=fontsize)
+
+        # plot_centered_cbar(f, im, 4, fontsize=fontsize-2, pad=0.02)
+    plot_centered_cbar(f, im, 3, fontsize=fontsize - 2, bottom=0.05, wdth=0.02)
 
     f.savefig(dir_out / f'ascat_eval_abs.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 def plot_ascat_eval_relative(res_path, dir_out):
 
-
     refs = ['Pcorr_OL', 'Pcorr_4K']
-    runs = [['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
+    ref_labels = ['$OL$', '$CTRL$']
 
-    titles = ['R$_{TC}$ - R$_{OL}$ (Individual)', 'R$_{TC}$ - R$_{OL}$ (Joint)', 'R$_{TC}$ - R$_{4K}$ (Individual)', 'R$_{TC}$ - R$_{4K}$ (Joint)']
+    runs = [['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
+    run_labels = [['$DA_{anom}$','$DA_{LF}$','$DA_{HF}$'], '$DA_{joint}$']
+
+    # titles = ['R$_{TC}$ - R$_{OL}$ (Individual)', 'R$_{TC}$ - R$_{OL}$ (Joint)', 'R$_{TC}$ - R$_{4K}$ (Individual)', 'R$_{TC}$ - R$_{4K}$ (Joint)']
+    # titles = ['$OL$', '$CTRL$', ['$DA_{anom}$','$DA_{LF}$','$DA_{HF}$'], '$DA_{joint}$']
 
     res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
 
-    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    res_tc = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv', index_col=0)
 
     modes = ['anom_lst', 'anom_lt','anom_st']
-    labels = [f'Anomaly skill', f'LF skill', f'HF skill']
+    labels = [r'$\Delta \rho_{anom}$', r'$\Delta \rho_{LF}$', r'$\Delta \rho_{HF}$']
 
-    cb_r = [-0.2, 0.2]
+    cb_r = [-0.25, 0.25]
 
-    fontsize = 14
+    fontsize = 17
 
-    f = plt.figure(figsize=(22,8))
+    f = plt.figure(figsize=(25,17))
 
-    for i, (m, label) in enumerate(zip(modes,labels)):
+    for j, (ref, ref_label) in enumerate(zip(refs, ref_labels)):
 
-        for j, ref in enumerate(refs):
+        for k, (run, run_label) in enumerate(zip(runs,run_labels)):
 
-            ref_col = f'ana_r_corr_{ref}_{m}'
-
-            res[ref_col][res[ref_col] < 0] = 0
-            res[ref_col][res[ref_col] > 1] = 1
-
-            for k, run in enumerate(runs):
+            for i, (m, label) in enumerate(zip(modes,labels)):
 
                 r = run if k == 1 else run[i]
+                rl = run_label if k == 1 else run_label[i]
 
-                ax = plt.subplot(3, 4, i * 4 + j * 2 + k + 1)
+                ref_col = f'ana_r_corr_{ref}_{m}'
+                res[ref_col][res[ref_col] < 0] = 0
+                res[ref_col][res[ref_col] > 1] = 1
+
+                ind = j * 6 + k * 3 + i + 1
+                figlabel = chr(96 + ind) + ')'
+                ax = plt.subplot(4, 3, ind)
 
                 col = f'ana_r_corr_{r}_{m}'
 
@@ -300,15 +314,7 @@ def plot_ascat_eval_relative(res_path, dir_out):
 
                 res['diff'] = res[col] - res[ref_col]
 
-                if i == 0:
-                    title = titles[j * 2 + k]
-                else:
-                    title = ''
-
-                if (j == 0) & (k == 0):
-                    ylabel = label
-                else:
-                    ylabel = ''
+                title = f'{label} ({rl} - {ref_label})'
 
                 r_asc_smap = res_tc[f'r_grid_{m}_p_ASCAT_SMAP']
                 r_asc_clsm = res_tc[f'r_grid_{m}_p_ASCAT_CLSM']
@@ -316,10 +322,13 @@ def plot_ascat_eval_relative(res_path, dir_out):
                 thres = 0.2
                 ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
 
-                im = plot_ease_img(res.reindex(ind_valid), 'diff' , title=title, cmap=cc.cm.bjy, cbrange=cb_r, fontsize=fontsize, print_mean=True, plot_cb=False)
-                ax.set_ylabel(ylabel)
+                im = plot_ease_img(res.reindex(ind_valid), 'diff' , title=title, cmap=cc.cm.coolwarm_r, cbrange=cb_r, fontsize=fontsize,
+                                   print_median=True,
+                                   plot_cb=False,
+                                   plot_label=figlabel)
 
-        plot_centered_cbar(f, im, 4, fontsize=fontsize-2, pad=0.02)
+        # plot_centered_cbar(f, im, 4, fontsize=fontsize-2, pad=0.02)
+        plot_centered_cbar(f, im, 3, fontsize=fontsize - 2, bottom=0.05, wdth=0.02)
 
     f.savefig(dir_out / f'ascat_eval_rel.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -482,7 +491,8 @@ def plot_ismn_statistics(res_path, dir_out):
     res_ismn = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
     networks  = ['SCAN', 'USCRN']
     res_ismn = res_ismn.loc[res_ismn.network.isin(networks),:]
-    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    res_tc = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv',
+        index_col=0)
 
     tg = GEOSldas_io().grid.tilegrids
     ind_ismn = []
@@ -494,78 +504,47 @@ def plot_ismn_statistics(res_path, dir_out):
 
     refs = ['Pcorr_OL', 'Pcorr_4K']
     runs = [['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
-    titles = ['Individual assim. (ASCAT, SSM)',
-              'Joint assim. (ASCAT, SSM)',
-              'Individual assim. (ISMN, SSM)',
-              'Joint assim. (ISMN, SSM)',
-              'Individual assim. (ISMN, RZSM)',
-              'Joint assim. (ISMN, RZSM)',
-              ]
+    run_labels = [['$DA_{anom}$', '$DA_{LF}$', '$DA_{HF}$'], '$DA_{joint}$']
 
     modes = ['anom_lst', 'anom_lt', 'anom_st']
-    labels = [f'Anomaly skill', f'LF skill', f'HF skill']
+    labels = [r'$\rho_{anom}$', r'$\rho_{LF}$', r'$\rho_{HF}$']
 
-    f = plt.figure(figsize=(26,14))
-    fontsize=16
+    f = plt.figure(figsize=(23, 20))
+    fontsize = 20
 
-    # output = 'ascat' # 'ascat' or 'ascat_ismn' or 'ismn'
-    # met = 'r_corr' # 'R_model_insitu'# or 'R2_model' / 'r' or 'r_corr'
-
-    outputs = ['ascat_ismn', 'ismn', 'ismn']
-    mets = ['r_corr', 'R_model_insitu', 'R_model_insitu']
-    variables = ['sm_surface', 'sm_surface', 'sm_rootzone']
+    outputs = ['ismn', 'ismn']
+    mets = ['R_model_insitu', 'R_model_insitu']
+    variables = ['sm_surface', 'sm_rootzone']
+    var_labels = ['SSM', 'RZSM']
 
     xres = res.copy()
     xres_ismn = res_ismn.copy()
 
-    for i, (mode, label) in enumerate(zip(modes, labels)):
-        for j, (output, met, var) in enumerate(zip(outputs, mets, variables)):
+    lim = [-0.25,0.25]
+    xloc = 0.09
+    xlocl = -0.23
+    bins = 18
 
-            res = xres.copy()
-            res_ismn  = xres_ismn.copy()
+    for i, (output, met, var, var_label) in enumerate(zip(outputs, mets, variables, var_labels)):
 
+        for j, (run, run_label) in enumerate(zip(runs,run_labels)):
 
-            if 'ubRMSD' in met:
-                lim = [-0.015,0.015]
-                xloc = -0.0135
-                bins = 15
-            else:
-                if 'ascat' not in output:
-                    lim = [-0.2,0.3]
-                    xloc = -0.18
-                    bins = 15
-                else:
-                    lim = [-0.25,0.25]
-                    xloc = -0.22
-                    bins = 20
+            for k, (mode, label) in enumerate(zip(modes, labels)):
 
-            for k, run in enumerate(runs):
+                r = run if j == 1 else run[k]
+                rl = run_label if j == 1 else run_label[k]
 
-                r = run if k == 1 else run[i]
-                title = titles[j * 2 + k] if i == 0 else ''
+                res = xres.copy()
+                res_ismn  = xres_ismn.copy()
 
-                if 'ascat' in output:
-                    col_ol = f'ana_{met}_Pcorr_OL_{mode}'
-                    col_4k = f'ana_{met}_Pcorr_4K_{mode}'
-                    col_da = f'ana_{met}_{r}_{mode}'
-                    if 'ismn' in output:
-                        res = res.reindex(ind_ismn)
-                    else:
-                        r_asc_smap = res_tc[f'r_grid_{mode}_p_ASCAT_SMAP']
-                        r_asc_clsm = res_tc[f'r_grid_{mode}_p_ASCAT_CLSM']
-                        r_smap_clsm = res_tc[f'r_grid_{mode}_p_SMAP_CLSM']
-                        thres = 0.2
-                        ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
-                        res = res.reindex(ind_valid)
-                else:
-                    res = res_ismn
-                    col_ol = f'{met}_Pcorr_OL_{mode}_{var}'
-                    col_4k = f'{met}_Pcorr_4K_{mode}_{var}'
-                    col_da = f'{met}_{r}_{mode}_{var}'
-                    if 'R2' in met:
-                        res[col_ol] **= 0.5
-                        res[col_4k] **= 0.5
-                        res[col_da] **= 0.5
+                res = res_ismn
+                col_ol = f'{met}_Pcorr_OL_{mode}_{var}'
+                col_4k = f'{met}_Pcorr_4K_{mode}_{var}'
+                col_da = f'{met}_{r}_{mode}_{var}'
+                if 'R2' in met:
+                    res[col_ol] **= 0.5
+                    res[col_4k] **= 0.5
+                    res[col_da] **= 0.5
 
                 if not ((output=='ismn') and ('R2' not in met)):
                     print('filtered')
@@ -579,29 +558,260 @@ def plot_ismn_statistics(res_path, dir_out):
                 res['da'] = res[col_da] - res[col_ol]
                 res['4k'] = res[col_4k] - res[col_ol]
 
-                ax = plt.subplot(3, 6, i * 6 + j * 2 + k + 1)
+                ind = i * 6 + j * 3 + k + 1
+                fig_label = chr(96 + ind) + ')'
+                ax = plt.subplot(4, 3, ind)
+
                 p1 = res['4k'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.8)
                 p2 = res['da'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.6)
                 plt.yticks(color='w', fontsize=5)
-                if i < 2:
-                    plt.xticks(color='w', fontsize=1)
-                if i == 0:
-                    plt.title(title, fontsize=fontsize-3)
-                if (j == 0) & (k == 0):
-                    plt.ylabel(label, fontsize=fontsize)
-                if (i == 2) & (j == 2) & (k == 1):
-                    plt.legend(labels=['R$_{4K, ref}$ - R$_{OL, ref}$', 'R$_{TC, ref}$ - R$_{OL, ref}$'], loc='lower right', fontsize=fontsize-4)
+                if ind <= 9:
+                    plt.xticks(color='w', fontsize=fontsize)
+                else:
+                    plt.xticks(fontsize=fontsize-2)
+                plt.title(f'$\Delta${label}; ISMN; {var_label}', fontsize=fontsize)
+                leg_labels = [f'$CTRL$ - $OL$',
+                              f'{rl} - $OL$']
+                plt.legend(labels=leg_labels, loc='lower left', fontsize=fontsize-4)
+
                 plt.axvline(color='black', linestyle='--', linewidth=1)
                 plt.xlim(lim)
                 ylim = ax.get_ylim()
                 yloc1 = ylim[1] - (ylim[1] - ylim[0])/10
-                yloc2 = ylim[1] - 1.6*(ylim[1] - ylim[0])/10
+                yloc2 = ylim[1] - 1.8*(ylim[1] - ylim[0])/10
+                yloc3 = ylim[1] - 1.2 * (ylim[1] - ylim[0]) / 10
+                plt.text(xlocl, yloc3, fig_label, fontsize=fontsize)
                 plt.text(xloc, yloc1, 'mean = %.2f' % res['4k'].mean(), color='#1f77b4', fontsize=fontsize-3)
                 plt.text(xloc, yloc2, 'mean = %.2f' % res['da'].mean(), color='#ff7f0e', fontsize=fontsize-3)
 
-    f.savefig(dir_out / f'stats.png', dpi=300, bbox_inches='tight')
+    f.savefig(dir_out / f'stats_ismn.png', dpi=300, bbox_inches='tight')
     plt.close()
 
+def plot_ascat_statistics(res_path, dir_out):
+    res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
+    res_ismn = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
+    networks = ['SCAN', 'USCRN']
+    res_ismn = res_ismn.loc[res_ismn.network.isin(networks), :]
+    res_tc = pd.read_csv(
+        r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv',
+        index_col=0)
+
+    tg = GEOSldas_io().grid.tilegrids
+    ind_ismn = []
+    for col, row in zip(res_ismn.ease_col.values + tg.loc['domain', 'i_offg'],
+                        res_ismn.ease_row.values + tg.loc['domain', 'j_offg']):
+        try:
+            ind_ismn += [res[(res.row == row) & (res.col == col)].index.values[0]]
+        except:
+            continue
+
+    refs = ['Pcorr_OL', 'Pcorr_4K']
+    runs = [['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
+    run_labels = [['$DA_{anom}$', '$DA_{LF}$', '$DA_{HF}$'], '$DA_{joint}$']
+
+    modes = ['anom_lst', 'anom_lt', 'anom_st']
+    labels = [r'$\rho_{anom}$', r'$\rho_{LF}$', r'$\rho_{HF}$']
+
+    f = plt.figure(figsize=(23, 12))
+    fontsize = 20
+
+    outputs = ['ascat_ismn',]
+    mets = ['r_corr',]
+    variables = ['sm_surface',]
+
+    var_labels = ['SSM',]
+
+    xres = res.copy()
+    xres_ismn = res_ismn.copy()
+
+    lim = [-0.25, 0.25]
+    xloc = 0.09
+    xlocl = -0.23
+    bins = 18
+
+    for i, (output, met, var, var_label) in enumerate(zip(outputs, mets, variables, var_labels)):
+
+        for j, (run, run_label) in enumerate(zip(runs, run_labels)):
+
+            for k, (mode, label) in enumerate(zip(modes, labels)):
+
+                r = run if j == 1 else run[k]
+                rl = run_label if j == 1 else run_label[k]
+
+                res = xres.copy()
+                res_ismn = xres_ismn.copy()
+
+                col_ol = f'ana_{met}_Pcorr_OL_{mode}'
+                col_4k = f'ana_{met}_Pcorr_4K_{mode}'
+                col_da = f'ana_{met}_{r}_{mode}'
+                if 'ismn' in output:
+                    res = res.reindex(ind_ismn)
+                else:
+                    r_asc_smap = res_tc[f'r_grid_{mode}_p_ASCAT_SMAP']
+                    r_asc_clsm = res_tc[f'r_grid_{mode}_p_ASCAT_CLSM']
+                    r_smap_clsm = res_tc[f'r_grid_{mode}_p_SMAP_CLSM']
+                    thres = 0.2
+                    ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
+                    res = res.reindex(ind_valid)
+
+                if not ((output == 'ismn') and ('R2' not in met)):
+                    print('filtered')
+                    res[col_ol][res[col_ol] <= 0] = np.nan
+                    res[col_4k][res[col_4k] <= 0] = np.nan
+                    res[col_da][res[col_da] <= 0] = np.nan
+                    res[col_ol][res[col_ol] >= 1] = np.nan
+                    res[col_4k][res[col_4k] >= 1] = np.nan
+                    res[col_da][res[col_da] >= 1] = np.nan
+
+                res['da'] = res[col_da] - res[col_ol]
+                res['4k'] = res[col_4k] - res[col_ol]
+
+                ind = i * 6 + j * 3 + k + 1
+                fig_label = chr(96 + ind) + ')'
+                ax = plt.subplot(2, 3, ind)
+
+                p1 = res['4k'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.8)
+                p2 = res['da'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.6)
+                plt.yticks(color='w', fontsize=5)
+                if ind <= 3:
+                    plt.xticks(color='w', fontsize=fontsize)
+                else:
+                    plt.xticks(fontsize=fontsize - 2)
+                plt.title(f'$\Delta${label}; ASCAT; {var_label}', fontsize=fontsize)
+                leg_labels = [f'$CTRL$ - $OL$',
+                              f'{rl} - $OL$']
+                plt.legend(labels=leg_labels, loc='lower left', fontsize=fontsize - 4)
+
+                plt.axvline(color='black', linestyle='--', linewidth=1)
+                plt.xlim(lim)
+                ylim = ax.get_ylim()
+                yloc1 = ylim[1] - (ylim[1] - ylim[0]) / 10
+                yloc2 = ylim[1] - 1.7 * (ylim[1] - ylim[0]) / 10
+                yloc3 = ylim[1] - 1.0 * (ylim[1] - ylim[0]) / 10
+                plt.text(xlocl, yloc3, fig_label, fontsize=fontsize)
+                plt.text(xloc, yloc1, 'mean = %.2f' % res['4k'].mean(), color='#1f77b4', fontsize=fontsize - 3)
+                plt.text(xloc, yloc2, 'mean = %.2f' % res['da'].mean(), color='#ff7f0e', fontsize=fontsize - 3)
+
+    f.savefig(dir_out / f'stats_ascat.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # res = pd.read_csv(res_path / 'ascat_eval.csv', index_col=0)
+    # res_ismn = pd.read_csv(res_path / 'insitu_TCA.csv', index_col=0)
+    # networks  = ['SCAN', 'USCRN']
+    # res_ismn = res_ismn.loc[res_ismn.network.isin(networks),:]
+    # res_tc = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv',
+    #     index_col=0)
+    #
+    # tg = GEOSldas_io().grid.tilegrids
+    # ind_ismn = []
+    # for col, row in zip(res_ismn.ease_col.values + tg.loc['domain','i_offg'], res_ismn.ease_row.values + tg.loc['domain','j_offg']):
+    #     try:
+    #         ind_ismn += [res[(res.row == row) & (res.col == col)].index.values[0]]
+    #     except:
+    #         continue
+    #
+    # refs = ['Pcorr_OL', 'Pcorr_4K']
+    # runs = [['Pcorr_anom_lst', 'Pcorr_anom_lt_ScDY', 'Pcorr_anom_st_ScYH'], 'Pcorr_LTST']
+    #
+    # titles = ['Individual assim. (ASCAT, SSM)',
+    #           'Joint assim. (ASCAT, SSM)',
+    #           'Individual assim. (ISMN, SSM)',
+    #           'Joint assim. (ISMN, SSM)',
+    #           'Individual assim. (ISMN, RZSM)',
+    #           'Joint assim. (ISMN, RZSM)',
+    #           ]
+    #
+    # modes = ['anom_lst', 'anom_lt', 'anom_st']
+    # labels = ['$R_{anom}$ ', '$R_{LF}$ ', '$R_{HF}$ ']
+    #
+    # f = plt.figure(figsize=(25, 19))
+    # fontsize = 17
+    #
+    # outputs = ['ascat_ismn', 'ismn', 'ismn']
+    # mets = ['r_corr', 'R_model_insitu', 'R_model_insitu']
+    # variables = ['sm_surface', 'sm_surface', 'sm_rootzone']
+    #
+    # xres = res.copy()
+    # xres_ismn = res_ismn.copy()
+    #
+    # for i, (output, met, var) in enumerate(zip(outputs, mets, variables)):
+    #     if 'ascat' not in output:
+    #         lim = [-0.2,0.3]
+    #         xloc = -0.18
+    #         bins = 15
+    #     else:
+    #         lim = [-0.25,0.25]
+    #         xloc = -0.22
+    #         bins = 20
+    #
+    #     for j, run in enumerate(runs):
+    #         r = run if j == 1 else run[i]
+    #
+    #         for k, (mode, label) in enumerate(zip(modes, labels)):
+    #
+    #             res = xres.copy()
+    #             res_ismn  = xres_ismn.copy()
+    #
+    #             title = titles[j * 2 + k] if i == 0 else ''
+    #
+    #             if 'ascat' in output:
+    #                 col_ol = f'ana_{met}_Pcorr_OL_{mode}'
+    #                 col_4k = f'ana_{met}_Pcorr_4K_{mode}'
+    #                 col_da = f'ana_{met}_{r}_{mode}'
+    #                 if 'ismn' in output:
+    #                     res = res.reindex(ind_ismn)
+    #                 else:
+    #                     r_asc_smap = res_tc[f'r_grid_{mode}_p_ASCAT_SMAP']
+    #                     r_asc_clsm = res_tc[f'r_grid_{mode}_p_ASCAT_CLSM']
+    #                     r_smap_clsm = res_tc[f'r_grid_{mode}_p_SMAP_CLSM']
+    #                     thres = 0.2
+    #                     ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
+    #                     res = res.reindex(ind_valid)
+    #             else:
+    #                 res = res_ismn
+    #                 col_ol = f'{met}_Pcorr_OL_{mode}_{var}'
+    #                 col_4k = f'{met}_Pcorr_4K_{mode}_{var}'
+    #                 col_da = f'{met}_{r}_{mode}_{var}'
+    #                 if 'R2' in met:
+    #                     res[col_ol] **= 0.5
+    #                     res[col_4k] **= 0.5
+    #                     res[col_da] **= 0.5
+    #
+    #             if not ((output=='ismn') and ('R2' not in met)):
+    #                 print('filtered')
+    #                 res[col_ol][res[col_ol] <= 0] = np.nan
+    #                 res[col_4k][res[col_4k] <= 0] = np.nan
+    #                 res[col_da][res[col_da] <= 0] = np.nan
+    #                 res[col_ol][res[col_ol] >= 1] = np.nan
+    #                 res[col_4k][res[col_4k] >= 1] = np.nan
+    #                 res[col_da][res[col_da] >= 1] = np.nan
+    #
+    #             res['da'] = res[col_da] - res[col_ol]
+    #             res['4k'] = res[col_4k] - res[col_ol]
+    #
+    #             ax = plt.subplot(6, 3, i * 6 + j * 3 + k + 1)
+    #
+    #             p1 = res['4k'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.8)
+    #             p2 = res['da'].hist(bins=bins, grid=False, ax=ax, range=lim, alpha=0.6)
+    #             plt.yticks(color='w', fontsize=5)
+    #             if i < 2:
+    #                 plt.xticks(color='w', fontsize=1)
+    #             if i == 0:
+    #                 plt.title(title, fontsize=fontsize-3)
+    #             if (j == 0) & (k == 0):
+    #                 plt.ylabel(label, fontsize=fontsize)
+    #             if (i == 2) & (j == 2) & (k == 1):
+    #                 plt.legend(labels=['R$_{4K, ref}$ - R$_{OL, ref}$', 'R$_{TC, ref}$ - R$_{OL, ref}$'], loc='lower right', fontsize=fontsize-4)
+    #             plt.axvline(color='black', linestyle='--', linewidth=1)
+    #             plt.xlim(lim)
+    #             ylim = ax.get_ylim()
+    #             yloc1 = ylim[1] - (ylim[1] - ylim[0])/10
+    #             yloc2 = ylim[1] - 1.6*(ylim[1] - ylim[0])/10
+    #             plt.text(xloc, yloc1, 'mean = %.2f' % res['4k'].mean(), color='#1f77b4', fontsize=fontsize-3)
+    #             plt.text(xloc, yloc2, 'mean = %.2f' % res['da'].mean(), color='#ff7f0e', fontsize=fontsize-3)
+    #
+    # f.savefig(dir_out / f'stats_ascat.png', dpi=300, bbox_inches='tight')
+    # plt.close()
 
 def plot_freq_components(dir_out):
 
@@ -648,8 +858,8 @@ def plot_freq_components(dir_out):
 
 def plot_perturbations(dir_out):
 
-    root = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/observation_perturbations/Pcorr')
-    res_tc = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv',
+    root = Path(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\observation_perturbations\Pcorr')
+    res_tc = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv',
                       index_col=0)
     pc = 'Pcorr'
     io = GEOSldas_io('ObsFcstAna')
@@ -660,11 +870,11 @@ def plot_perturbations(dir_out):
 
     dtype, hdr, length = template_error_Tb40()
 
-    f = plt.figure(figsize=(22, 8))
+    f = plt.figure(figsize=(23, 15))
 
     fontsize=14
     cbrange = [0,8]
-    cmap=cc.cm.bjy_r
+    cmap=cc.cm.bjy
     # cmap='viridis'
 
     modes = ['anom_lst', 'anom_lt', 'anom_st']
@@ -688,28 +898,28 @@ def plot_perturbations(dir_out):
         ind_valid = res_tc[(r_asc_smap > thres) & (r_asc_smap > thres) & (r_asc_smap > thres)].index
         ind_valid = np.vectorize(io.grid.colrow2tilenum)(res_tc.loc[ind_valid,'col'].values, res_tc.loc[ind_valid,'row'].values, local=False)
 
-        plt.subplot(3,4,i*4+1)
+        plt.subplot(4,3,i+1)
         im = plot_ease_img2(imgA.reindex(ind).reindex(ind_valid),'err_Tbv', cbrange=cbrange, cmap=cmap, io=io, plot_cmap=False)
         if i==0:
-            plt.title('$\hat{R}$ (V-pol, Asc.)', fontsize=fontsize)
-        plt.ylabel(title, fontsize=fontsize)
+            plt.ylabel('$\hat{R}$ (V-pol, Asc.)', fontsize=fontsize)
+        plt.title(title, fontsize=fontsize)
 
-        plt.subplot(3,4,i*4+2)
+        plt.subplot(4,3,i+4)
         plot_ease_img2(imgD.reindex(ind).reindex(ind_valid),'err_Tbv', cbrange=cbrange, cmap=cmap, io=io, plot_cmap=False)
         if i==0:
-            plt.title('$\hat{R}$ (V-pol, Dsc.)', fontsize=fontsize)
+            plt.ylabel('$\hat{R}$ (V-pol, Dsc.)', fontsize=fontsize)
 
-        plt.subplot(3,4,i*4+3)
+        plt.subplot(4,3,i+7)
         plot_ease_img2(imgA.reindex(ind).reindex(ind_valid),'err_Tbh', cbrange=cbrange, cmap=cmap, io=io, plot_cmap=False)
         if i==0:
-            plt.title('$\hat{R}$ (H-pol, Asc.)', fontsize=fontsize)
+            plt.ylabel('$\hat{R}$ (H-pol, Asc.)', fontsize=fontsize)
 
-        plt.subplot(3,4,i*4+4)
+        plt.subplot(4,3,i+10)
         plot_ease_img2(imgD.reindex(ind).reindex(ind_valid),'err_Tbh', cbrange=cbrange, cmap=cmap, io=io, plot_cmap=False)
         if i==0:
-            plt.title('$\hat{R}$ (H-pol, Dsc.)', fontsize=fontsize)
+            plt.ylabel('$\hat{R}$ (H-pol, Dsc.)', fontsize=fontsize)
 
-    plot_centered_cbar(f, im, 4, fontsize=fontsize-4, bottom=0.07)
+    plot_centered_cbar(f, im, 3, fontsize=fontsize-2, bottom=0.06, fig_ind=7, wdth=0.02)
 
     plt.savefig(dir_out / f'perturbations.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -808,9 +1018,9 @@ def plot_uncertainty_ratios(dir_out):
 
     sensors = ['ASCAT', 'SMAP', 'CLSM']
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+    res = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv', index_col=0)
     res_tc = pd.read_csv(
-        '/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+        r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv', index_col=0)
 
     tg = GEOSldas_io().grid.tilegrids
     res_cols = res.col.values - tg.loc['domain', 'i_offg']
@@ -821,10 +1031,10 @@ def plot_uncertainty_ratios(dir_out):
     cb = [-10, 10]
     cmap = cc.cm.bjy
 
-    modes = ['4K', 'anom_lst', 'anom_lt', 'anom_st']
-    titles = ['4K benchmark', 'Anomalies', 'LF signal', 'HF signal']
+    modes = ['anom_lt', 'anom_lt', 'anom_lt', 'anom_st']
+    titles = ['$CTRL$', '$DA_{anom}$', '$DA_{LF}$', '$DA_{HF}$']
 
-    ios = [GEOSldas_io('ObsFcstAna', exp=f'NLv4_M36_US_DA_SMAP_Pcorr_{mode}').timeseries for mode in modes]
+    ios = [GEOSldas_io('ObsFcstAna', exp=f'NLv4_M36_US_DA_Pcorr_scl_SMAP_{mode}').timeseries for mode in modes]
     io_ol = GEOSldas_io('ObsFcstAna', exp=f'NLv4_M36_US_OL_Pcorr').timeseries
 
     grid = GEOSldas_io().grid
@@ -929,10 +1139,10 @@ def plot_filter_diagnostics(res_path, dir_out):
 
     fname = res_path / 'filter_diagnostics.nc'
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv',
+    res = pd.read_csv(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv',
                      index_col=0)
     res_tc = pd.read_csv(
-        '/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/sm_validation/Pcorr/result.csv', index_col=0)
+        r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\sm_validation\Pcorr\result.csv', index_col=0)
     tg = GEOSldas_io().grid.tilegrids
     res_cols = res.col.values - tg.loc['domain', 'i_offg']
     res_rows = res.row.values - tg.loc['domain', 'j_offg']
@@ -944,14 +1154,14 @@ def plot_filter_diagnostics(res_path, dir_out):
 
     fontsize = 14
 
-    root = Path('/Users/u0116961/data_sets/GEOSldas_runs')
+    root = Path(r'D:\_KUL_backup_2022\data_sets\GEOSldas_runs')
     runs = [run.name for run in root.glob('*_DA_SMAP_*')]
     runs += ['NLv4_M36_US_OL_Pcorr', 'NLv4_M36_US_OL_noPcorr']
 
     tags = ['OL_Pcorr', 'Pcorr_4K', f'Pcorr_anom_lst', 'Pcorr_LTST']
     iters = [np.where([tag in run for run in runs])[0][0] for tag in tags]
 
-    titles = ['Open-loop', '4K constant', 'Anomalies']
+    titles = ['Open-loop', '$CTRL$', '$DA_{anom}']
     labels = ['H pol. / Asc.', 'V pol. / Asc.']
 
     with Dataset(fname) as ds:
@@ -990,19 +1200,20 @@ def plot_filter_diagnostics(res_path, dir_out):
 
 if __name__=='__main__':
 
-    res_path = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_all')
+    res_path = Path(r'D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\validation_all')
     # dir_out = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots')
-    dir_out = Path('/Users/u0116961/Documents/publications/2021_ag_madkf_clsm/images')
+    dir_out = Path(r'H:\work\SMAP_DA_paper\plots')
     if not dir_out.exists():
         Path.mkdir(dir_out, parents=True)
 
     # plot_predicted_skillgain(dir_out)
-    # plot_ascat_eval_absolute(res_path, dir_out)
-    # plot_ascat_eval_relative(res_path, dir_out)
+    plot_ascat_eval_absolute(res_path, dir_out)
+    plot_ascat_eval_relative(res_path, dir_out)
     # plot_statistics(res_path, dir_out)
     # plot_ismn_statistics(res_path, dir_out)
+    # plot_ascat_statistics(res_path, dir_out)
     # plot_freq_components(dir_out)
-    plot_perturbations(dir_out)
+    # plot_perturbations(dir_out)
     # plot_tca_uncertainties(dir_out)
     # plot_orthogonality_check(dir_out)
     # plot_uncertainty_ratios(dir_out)

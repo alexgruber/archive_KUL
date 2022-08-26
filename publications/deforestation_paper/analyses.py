@@ -21,7 +21,7 @@ from sklearn.decomposition import PCA
 
 import pymannkendall as mk
 from datetime import datetime
-from bfast import BFASTMonitor
+# from bfast import BFASTMonitor
 
 from myprojects.timeseries import calc_anom, calc_anomaly
 
@@ -498,7 +498,7 @@ def calc_lagged_corr():
 
 def plot_lagged_corr_spatial():
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/lagged_corr.csv', index_col=0)
+    res = pd.read_csv("D:\_KUL_backup_2022\Documents\work\deforestation_paper\lagged_corr_no_sif.csv", index_col=0)
 
     ds = io('LAI')
     lut = ds.lut.reindex(res.index)
@@ -544,7 +544,7 @@ def plot_lagged_corr_spatial():
         plot_centered_cbar(f, im, len(lags), fontsize=fontsize, pad=0.02, wdth=0.02, hspace=0.01)
 
 
-        fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/lagged_corr_anom_{met}.png'
+        fname = f'H:\work\deforestation_paper\plots\lagged_corr_anom_{met}.png'
         f.savefig(fname, dpi=300, bbox_inches='tight')
         plt.close()
 
@@ -654,74 +654,95 @@ def plot_best_corr_spatial_vod():
 
 def plot_lagged_corr_boxplot():
 
-    res = pd.read_csv('/Users/u0116961/Documents/work/deforestation_paper/lagged_corr_w_sif.csv', index_col=0)
+    anom = False
+
+    res = pd.read_csv('H:\work\deforestation_paper\lagged_corr_no_sif.csv', index_col=0)
 
     ds = io('LAI')
     lut = ds.lut.reindex(res.index)
+    ds_agb = io('AGB')
+    ds_met = io('MERRA2')
+
+    cl = pd.read_csv('H:\work\deforestation_paper\PCA_classes.csv', index_col=0)
+    cl_arr = np.full(ds_agb.lat.shape, np.nan)
+    cl_arr[ds_agb.lut.row_ease,ds_agb.lut.col_ease] = cl.values.reshape(ds_met.lat.shape)[ds_agb.lut.row_merra,ds_agb.lut.col_merra]
+
+    cl = cl_arr[ds.lut.loc[res.index, 'row_ease'], ds.lut.loc[res.index, 'col_ease']]
 
     variables = ['T', 'P', 'R']
     titles = ['Temperature', 'Precipitation', 'Radiation']
-    datasets = ['LAI', 'SIF', 'VOD']
+    datasets = ['LAI', 'VOD']
 
-    lags = np.arange(-6, 1, 1)
+    lags = np.arange(-12, 1, 1)
 
     pos = [i + j for i in np.arange(1, len(variables) + 1) for j in np.linspace(-0.4, 0.4, len(lags))]
     colors = [f'{s}' for n in np.arange(len(variables)) for s in np.linspace(0.2, 0.98, len(lags))]
     # colors = [s for n in np.arange(len(variables)) for s in ['lightblue', 'lightgreen', 'coral']]
 
-    f = plt.figure(figsize=(13, 14))
-    fontsize = 14
+    for cls in np.unique(cl[~np.isnan(cl)]):
 
-    for n, d in enumerate(datasets):
-        ax = plt.subplot(3, 1, n+1)
-        if n == 0:
-            axpos = ax.get_position()
+        tmp_res = res[cl==cls]
 
-        data = list()
+        f = plt.figure(figsize=(13, 14))
+        fontsize = 14
 
-        for v, t in zip(variables, titles):
-            for lag in lags:
-                var = f'R_anom_{d}_{v}_{lag}'
-                tmp = res[var].values
-                # tmp = tmp[tmp>0]
-                data.append(tmp[~np.isnan(tmp)])
+        for n, d in enumerate(datasets):
+            ax = plt.subplot(3, 1, n+1)
+            if n == 0:
+                axpos = ax.get_position()
 
-        box = ax.boxplot(data, whis=[10, 90], showfliers=False, positions=pos, widths=0.07, patch_artist=True)
-        for patch, color in zip(box['boxes'], colors):
-            patch.set(color='black', linewidth=2)
-            patch.set_facecolor(color)
-        for patch in box['medians']:
-            patch.set(color='black', linewidth=2)
-        for patch in box['whiskers']:
-            patch.set(color='black', linewidth=1)
+            data = list()
 
-        plt.xlim(0.5, len(variables)+0.5)
-        if n < 2:
-            plt.xticks([], [], fontsize=fontsize)
-        else:
-            plt.xticks(np.arange(1,len(variables)+1), titles , fontsize=fontsize)
-        plt.ylim(-0.5,0.5)
-        plt.yticks(np.arange(-0.5,0.5,0.2))
-        # plt.ylim(0,0.9)
-        # plt.yticks(np.arange(0,1,0.2))
-        plt.axhline(color='k', linestyle='--', linewidth=1)
+            for v, t in zip(variables, titles):
+                for lag in lags:
+                    if anom:
+                        var = f'R_anom_{d}_{v}_{lag}'
+                    else:
+                        var = f'R_{d}_{v}_{lag}'
+                    tmp = tmp_res[var].values
+                    # tmp = tmp[tmp>0]
+                    data.append(tmp[~np.isnan(tmp)])
 
-        for i in np.arange(1,len(variables)):
-            plt.axvline(i + 0.5, linewidth=1.5, color='k')
+            box = ax.boxplot(data, whis=[10, 90], showfliers=False, positions=pos, widths=0.04, patch_artist=True)
+            for patch, color in zip(box['boxes'], colors):
+                patch.set(color='black', linewidth=2)
+                patch.set_facecolor(color)
+            for patch in box['medians']:
+                patch.set(color='black', linewidth=2)
+            for patch in box['whiskers']:
+                patch.set(color='black', linewidth=1)
 
-        plt.ylabel(d, fontsize=fontsize)
+            plt.xlim(0.5, len(variables)+0.5)
+            if n < 2:
+                plt.xticks([], [], fontsize=fontsize)
+            else:
+                plt.xticks(np.arange(1,len(variables)+1), titles , fontsize=fontsize)
+            if anom:
+                plt.ylim(-0.5,0.5)
+                plt.yticks(np.arange(-0.5,0.5,0.2))
+            else:
+                plt.ylim(-0.8,0.85)
+                plt.yticks(np.arange(-0.8,1,0.2))
+            plt.axhline(color='k', linestyle='--', linewidth=1)
 
-        if n==0:
-            plt.title('Lagged correlation [-] (anomalies)',fontsize=fontsize)
+            for i in np.arange(1,len(variables)):
+                plt.axvline(i + 0.5, linewidth=1.5, color='k')
 
-    f.subplots_adjust(hspace=0.1)
+            plt.ylabel(d, fontsize=fontsize)
 
-    plt.figlegend((box['boxes'][0:len(lags)]), lags, 'upper right', title='Lag [m]',
-                  bbox_to_anchor=(axpos.x1+0.09,axpos.y1+0.013), fontsize=fontsize-2)
+            if n==0:
+                anom_str = '(anomalies) ' if anom else ''
+                plt.title(f'Lagged correlation [-] {anom_str}(N = {len(tmp_res)})',fontsize=fontsize)
 
-    fname = f'/Users/u0116961/Documents/work/deforestation_paper/plots/lagged_corr_anom_boxplot_w_sif.png'
-    f.savefig(fname, dpi=300, bbox_inches='tight')
-    plt.close()
+        f.subplots_adjust(hspace=0.1)
+
+        plt.figlegend((box['boxes'][0:len(lags)]), lags, 'upper right', title='Lag [m]',
+                      bbox_to_anchor=(axpos.x1+0.09,axpos.y1+0.013), fontsize=fontsize-2)
+
+        anom_str = 'anom_' if anom else ''
+        fname = f'H:\work\deforestation_paper\plots\lagged_corr_{anom_str}boxplot_w_sif_cl{int(cls)}.png'
+        f.savefig(fname, dpi=300, bbox_inches='tight')
+        plt.close()
 
     # plt.tight_layout()
     # plt.show()
@@ -1330,19 +1351,19 @@ def calc_pca_classes():
 
 
 if __name__=='__main__':
-    AGB_VOD_LAI()
+    # AGB_VOD_LAI()
     # mean_veg_met()
     # calc_lagged_corr()
     # plot_lagged_corr_spatial()
     # plot_lagged_corr_spatial_LAI_VOD_SIF()
-    # plot_lagged_corr_boxplot()
+    plot_lagged_corr_boxplot()
     # plot_best_corr_spatial_vod()
     # calc_trends()
     # plot_trends()
     # plot_mask()
     # plot_trend_tcl()
     # calc_trend_breakpoints()
-    plot_breakpoints()
+    # plot_breakpoints()
     # plot_bp_rss_stats()
     # plot_trend_ts()
     # calc_pca_classes()

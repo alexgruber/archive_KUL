@@ -10,26 +10,30 @@ from pathlib import Path
 
 from netCDF4 import Dataset, num2date
 
+from ascat.read_native.cdr import load_grid
+
 from pyldas.interface import LDAS_io
+
 
 class HSAF_io(object):
 
-    def __init__(self, root=None, version='h115', ext='h116'):
+    def __init__(self, root=None, version='h119', ext='h120'):
 
         if root is None:
-            if platform.system() == 'Linux':
-                self.root = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/ASCAT')
-            else:
-                self.root = Path('~/data_sets/ASCAT').expanduser()
+            # if platform.system() == 'Linux':
+            #     self.root = Path('/staging/leuven/stg_00024/OUTPUT/alexg/data_sets/ASCAT')
+            # else:
+            # self.root = Path(r"R:\Projects\H_SAF_CDOP3\05_deliverables_products")
+            self.root = Path(r"D:\data_sets\HSAF")
         else:
             self.root = Path(root)
 
         self.data_path = os.path.join(self.root, version)
         self.version = version.upper()
 
-        self.grid = Dataset(self.root / 'warp5_grid' / 'TUW_WARP5_grid_info_2_2.nc')
-        self.gpis = self.grid['gpi'][:][self.grid['land_flag'][:]==1]
-        self.cells = self.grid['cell'][:][self.grid['land_flag'][:]==1]
+        self.grid = load_grid(self.root.parent / 'auxiliary' / 'warp5_grid' / 'TUW_WARP5_grid_info_2_3.nc')
+        self.gpis = self.grid.activegpis
+        self.cells = self.grid.activearrcell
 
         self.loaded_cell = None
         self.fid = None
@@ -43,7 +47,7 @@ class HSAF_io(object):
         # quite slow to read!
 
     def latlon2gpi(self, lat, lon):
-        return np.argmin((self.grid['lat'][:] - lat)**2 + (self.grid['lon'][:] - lon)**2)
+        return self.grid.find_nearest_gpi(lon, lat, max_dist=10000)[0]
 
     def load(self, cell):
 
@@ -123,8 +127,6 @@ class HSAF_io(object):
             self.fid.close()
         if self.ext is not None:
             self.ext.close()
-        if self.grid is not None:
-            self.grid.close()
 
 
 def append_ease_gpis():
@@ -149,8 +151,8 @@ def append_ease_gpis():
     gpi_list.to_csv(r"D:\data_sets\ASCAT\warp5_grid\pointlist_warp_conus_w_ease_colrow.csv")
 
 
-# if __name__=='__main__':
-#     append_ease_gpis()
+if __name__=='__main__':
+    append_ease_gpis()
 
 
 

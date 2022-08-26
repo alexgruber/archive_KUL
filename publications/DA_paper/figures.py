@@ -199,7 +199,7 @@ def plot_potential_skillgain_decomposed(dir_out):
 
 def plot_station_locations(dir_out):
 
-    nl = pd.read_csv('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation/insitu_TCA.csv', index_col=0)
+    nl = pd.read_csv(r"D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\validation_all\insitu_TCA.csv", index_col=0)
     nl.index = nl.network
     nl.drop('network', axis='columns', inplace=True)
 
@@ -234,7 +234,7 @@ def plot_station_locations(dir_out):
     xc, yc = m(lons_crn,lats_crn)
 
     plt.plot(xs,ys,'or',markersize = 13, label='SCAN')
-    plt.plot(xc,yc,'ob',markersize = 13, label='USCRN')
+    plt.plot(xc,yc,'Pb',markersize = 13, label='USCRN')
 
     plt.legend(fontsize=26,loc=3)
 
@@ -1264,8 +1264,8 @@ if __name__=='__main__':
     # res_path_hf = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_ScYH')
     # res_path_lf = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_ScDY')
 
-    res_path = Path(f'/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/validation_all')
-    dir_out = Path('/Users/u0116961/Documents/work/MadKF/CLSM/SM_err_ratio/GEOSldas/plots')
+    res_path = Path(r"D:\_KUL_backup_2022\Documents\work_KUL\MadKF\CLSM\SM_err_ratio\GEOSldas\validation_all")
+    dir_out = Path(r'H:\work\SMAP_DA_paper\plots')
     if not dir_out.exists():
         Path.mkdir(dir_out, parents=True)
 
@@ -1280,8 +1280,8 @@ if __name__=='__main__':
     # plot_potential_skillgain_simple(dir_out)
     # plot_actual_skillgain(res_path, dir_out)
     # plot_potential_skillgain_decomposed(dir_out)
-    # plot_station_locations(dir_out)
-    plot_ismn_vs_ascat(res_path, dir_out)
+    plot_station_locations(dir_out)
+    # plot_ismn_vs_ascat(res_path, dir_out)
     # plot_ismn_statistics(res_path, dir_out)
     # plot_ascat_eval_uncorrected(res_path, dir_out)
     # plot_ascat_eval(res_path, dir_out)

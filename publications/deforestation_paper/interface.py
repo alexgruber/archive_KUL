@@ -32,7 +32,7 @@ class io(object):
 
     def __init__(self, name):
 
-        root = Path('/Users/u0116961/data_sets/')
+        root = Path('D:\_KUL_backup_2022\data_sets')
 
         self.lut = pd.read_csv(root / 'LUT_EASE25_MERRA2_SIF_South_America.csv', index_col=0)
 

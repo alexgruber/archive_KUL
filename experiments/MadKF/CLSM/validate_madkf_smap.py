@@ -834,7 +834,7 @@ def plot_eval():
 
 
 
-def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, pad=0.03, wdth=0.03, fontsize=12, col_offs=0):
+def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, pad=0.03, wdth=0.03, fontsize=12, col_offs=0, fig_ind=None):
 
     f.subplots_adjust(wspace=wspace, hspace=hspace, bottom=bottom)
 
@@ -845,7 +845,10 @@ def plot_centered_cbar(f, im, n_cols, wspace=0.04, hspace=0.025, bottom=0.06, pa
         x1 = (pos1.x0 + pos1.x1) / 2
         x2 = (pos2.x0 + pos2.x1) / 2
     else:
-        pos = f.axes[floor(ctr)].get_position()
+        if fig_ind:
+            pos = f.axes[fig_ind].get_position()
+        else:
+            pos = f.axes[floor(ctr)].get_position()
         x1 = pos.x0
         x2 = pos.x1
 

@@ -8,7 +8,8 @@ import pandas as pd
 from pathlib import Path
 
 from ismn.interface import ISMN_Interface
-from pyldas.interface import GEOSldas_io
+# from pyldas.interface import GEOSldas_io
+from pyldas.grids import EASE2
 
 class ISMN_io(object):
 
@@ -18,7 +19,7 @@ class ISMN_io(object):
         self.row_offs = row_offs
 
         if path is None:
-            self.root = Path('~/data_sets/ISMN/CONUS_20070101_20200101').expanduser()
+            self.root = Path(r"D:\data_sets\ISMN\Global_20150101_20220101_downloaded_20220727")
         else:
             self.root = Path(path)
 
@@ -31,6 +32,9 @@ class ISMN_io(object):
         else:
             self.list = pd.read_csv(self.list_file, index_col=0)
 
+    def close(self):
+        self.io.close_files()
+
     def generate_station_list(self):
 
         tmplist = self.io.metadata[[('network','val'),('station','val'),('latitude','val'),('longitude','val')]]
@@ -40,18 +44,18 @@ class ISMN_io(object):
         tmplist = tmplist.iloc[np.unique(tmplist.network+tmplist.station, return_index=True)[1]]
         tmplist.index = np.arange(len(tmplist))
 
-        grid = GEOSldas_io().grid
+        # grid = GEOSldas_io().grid
+        grid = EASE2(gtype='M36')
         vfindcolrow = np.vectorize(grid.lonlat2colrow)
-        col, row = vfindcolrow(tmplist.longitude.values, tmplist.latitude.values)
+        col, row = vfindcolrow(tmplist.longitude.values, tmplist.latitude, domain=False)
         tmplist['ease_col'] = col
         tmplist['ease_row'] = row
 
-        tmplist['ease_col'] -= self.col_offs
-        tmplist['ease_row'] -= self.row_offs
+        # tmplist['ease_col'] -= self.col_offs
+        # tmplist['ease_row'] -= self.row_offs
 
         tmplist.to_csv(self.list_file)
         self.list = tmplist
-
 
     def read(self, network, station, surface_depth=0.1, surface_only=False):
 
@@ -89,7 +93,7 @@ class ISMN_io(object):
     def iter_stations(self, surface_depth=0.1, surface_only=True):
 
         for idx, station in self.list.iterrows():
-            yield station, self.read(station.network, station.station, surface_depth=surface_depth)
+            yield station, self.read(station.network, station.station, surface_depth=surface_depth, surface_only=surface_only)
 
 
 if __name__=='__main__':
