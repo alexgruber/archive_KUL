@@ -89,7 +89,7 @@ def generate_precipitation(size=5000, scale=15):
 
     '''
     precip = np.zeros(size)
-    ind = [rnd.uniform(size=size)<0.1]
+    ind = rnd.uniform(size=size)<0.01
     precip[ind] = rnd.exponential(scale,size=size)[ind]
 
     return precip
